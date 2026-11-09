@@ -1,12 +1,13 @@
 # Changelog
 
-Every pull request into `main` bumps the version in
-`custom_components/battery_planner/manifest.json` and adds a section here. Merging
-publishes a GitHub release with this section as its notes, which is what HACS
-shows as the version. Versions follow [semantic versioning](https://semver.org):
-`0.x.0` for new features, `0.x.y` for fixes.
+Pull requests into `staging` add a snapshot section (`## [X.Y.Z-snapshot.N]`) and
+publish a pre-release; the pull request into `main` replaces them with one
+`## [X.Y.Z]` section and publishes the stable release that HACS shows as the
+version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
+[semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
+for fixes.
 
-## [0.2.1] - 2026-11-09
+## [0.2.1-snapshot.1] - 2026-11-09
 
 ### Fixed
 - **A battery below its reserve is handled properly.** With a share below 100% and the charge under the reserve (say 25% with 50% reserved), the plan used to start from "nothing to sell" and could count energy that only refills the reserve as sellable. The reserve is now a floor: the plan starts from the real level, may charge at any level, and only sells what is above the floor.
