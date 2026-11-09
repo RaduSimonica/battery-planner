@@ -13,6 +13,8 @@ HACS → Custom repositories → add this repository as *Integration* → instal
 
 You also need a price source. For Romania, install [OPCOM PZU](https://github.com/RaduSimonica/ha-opcom-pzu) (0.3.0 or later) and pick its *Upcoming prices* sensor when asked.
 
+**Snapshots:** new things first appear as pre-releases (`vX.Y.Z-snapshot.N`). To try them, open the repository in HACS, menu → *Show beta versions*, then update. Stable releases are published once in a while from the snapshots that proved fine.
+
 ## Setup
 
 1. **Price source:** a sensor with a `prices` attribute (format below).

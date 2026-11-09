@@ -2,7 +2,7 @@ name: Validate
 
 on:
   push:
-    branches: [main, development]
+    branches: [main, staging, development]
   pull_request:
 
 permissions:
