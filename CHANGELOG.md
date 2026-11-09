@@ -6,6 +6,11 @@ publishes a GitHub release with this section as its notes, which is what HACS
 shows as the version. Versions follow [semantic versioning](https://semver.org):
 `0.x.0` for new features, `0.x.y` for fixes.
 
+## [0.1.2] - 2026-11-09
+
+### Fixed
+- **The plan is redone as soon as the battery sensors come back.** After a Home Assistant restart the BMS sensor often appears a few seconds after the planner, which then planned for an empty battery until the next 15-minute step. It now plans again when the charge or capacity sensor goes from unavailable to a value.
+
 ## [0.1.1] - 2026-11-09
 
 ### Fixed

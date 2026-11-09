@@ -58,6 +58,16 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         self.config_entry.async_on_unload(
             async_track_state_change_event(self.hass, [self.price_entity], self._source_changed)
         )
+        sensors = [
+            e for e in (
+                self.config_entry.options.get(CONF_BATTERY_SOC_ENTITY),
+                self.config_entry.options.get(CONF_BATTERY_CAPACITY_ENTITY),
+            ) if e
+        ]
+        if sensors:
+            self.config_entry.async_on_unload(
+                async_track_state_change_event(self.hass, sensors, self._battery_sensor_changed)
+            )
         self.config_entry.async_on_unload(
             async_track_utc_time_change(self.hass, self._tick, minute=(0, 15, 30, 45), second=2)
         )
@@ -66,6 +76,19 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
     @callback
     def _source_changed(self, _event: Event[EventStateChangedData]) -> None:
         self.hass.async_create_task(self.async_refresh())
+
+    @callback
+    def _battery_sensor_changed(self, event: Event[EventStateChangedData]) -> None:
+        """Plan again when a battery sensor comes back (e.g. after a restart).
+
+        Ordinary changes of the level wait for the 15-minute tick; only the move
+        from "no value" to a value is worth an immediate plan.
+        """
+        old, new = event.data["old_state"], event.data["new_state"]
+        if new is None or new.state in UNAVAILABLE:
+            return
+        if old is None or old.state in UNAVAILABLE:
+            self.hass.async_create_task(self.async_refresh())
 
     @callback
     def _tick(self, _now: datetime) -> None:

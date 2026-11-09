@@ -265,3 +265,29 @@ async def test_unload_and_reload(hass, entry, freezer):
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
     assert hass.states.get(GAIN_TOMORROW).state == "unavailable"
+
+
+async def test_plan_is_redone_when_the_battery_sensor_comes_back(hass, entry, freezer):
+    """After a restart the BMS sensor appears seconds after the planner starts."""
+    freezer.move_to(NOW)
+    publish(hass, rows(since="2026-11-09T12:00:00+02:00"))
+    hass.states.async_set("sensor.soc", "unavailable", {"unit_of_measurement": "%"})
+    hass.config_entries.async_update_entry(entry, options={"battery_soc_entity": "sensor.soc"})
+    await setup(hass, entry)
+    assert hass.states.get(GAIN).attributes["starting_energy"] == "assumed empty"
+
+    hass.states.async_set("sensor.soc", "100", {"unit_of_measurement": "%"})
+    await hass.async_block_till_done()
+    attrs = hass.states.get(GAIN).attributes
+    assert attrs["starting_energy"] == "sensor" and attrs["starting_energy_kwh"] == pytest.approx(10.0)
+
+
+async def test_ordinary_level_changes_wait_for_the_tick(hass, entry, freezer):
+    freezer.move_to(NOW)
+    publish(hass, rows(since="2026-11-09T12:00:00+02:00"))
+    hass.states.async_set("sensor.soc", "100", {"unit_of_measurement": "%"})
+    hass.config_entries.async_update_entry(entry, options={"battery_soc_entity": "sensor.soc"})
+    await setup(hass, entry)
+    hass.states.async_set("sensor.soc", "50", {"unit_of_measurement": "%"})
+    await hass.async_block_till_done()
+    assert hass.states.get(GAIN).attributes["starting_energy_kwh"] == pytest.approx(10.0)  # not yet
