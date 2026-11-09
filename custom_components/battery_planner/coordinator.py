@@ -21,6 +21,9 @@ from .prices import PricePoint, PriceSeries, currency_of, local_day_bounds, pars
 
 _LOGGER = logging.getLogger(__name__)
 
+# Energy units a capacity or state-of-charge sensor may use, as a factor to kWh.
+_CAPACITY_UNITS: dict[str | None, float] = {None: 1.0, "kWh": 1.0, "Wh": 0.001}
+
 UNAVAILABLE = ("unknown", "unavailable")
 
 
@@ -49,6 +52,7 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         self.data = PlanData()
         self._series = PriceSeries()
         self._unit: str | None = None
+        self._warned_units: set[str] = set()
 
     async def async_start(self) -> None:
         self.config_entry.async_on_unload(
@@ -106,19 +110,32 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         params = self.battery
         capacity = self._read_number(opts.get(CONF_BATTERY_CAPACITY_ENTITY))
         if capacity and capacity[0] > 0:
-            kwh = capacity[0] / 1000 if capacity[1] == "Wh" else capacity[0]
-            params = replace(params, capacity_kwh=kwh)
+            factor = _CAPACITY_UNITS.get(capacity[1])
+            if factor is None:
+                self._warn_unit(opts[CONF_BATTERY_CAPACITY_ENTITY], capacity[1], "kWh or Wh")
+            else:
+                params = replace(params, capacity_kwh=capacity[0] * factor)
         soc = self._read_number(opts.get(CONF_BATTERY_SOC_ENTITY))
         if not soc:
             return params, 0.0, "assumed empty"
         value, unit = soc
-        if unit == "kWh":
-            energy = value
-        elif unit == "Wh":
-            energy = value / 1000
-        else:  # percent
+        if unit in (None, "%"):
             energy = min(max(value, 0.0), 100.0) / 100 * params.capacity_kwh
+        elif unit in _CAPACITY_UNITS:
+            energy = value * _CAPACITY_UNITS[unit]
+        else:
+            self._warn_unit(opts[CONF_BATTERY_SOC_ENTITY], unit, "%, kWh or Wh")
+            return params, 0.0, "assumed empty"
         return params, min(max(energy, 0.0), params.capacity_kwh), "sensor"
+
+    def _warn_unit(self, entity_id: str, unit: str | None, accepted: str) -> None:
+        """Say once per sensor that its unit cannot be used (e.g. Ah, which needs a voltage)."""
+        if entity_id not in self._warned_units:
+            self._warned_units.add(entity_id)
+            _LOGGER.warning(
+                "%s reports %s, which cannot be used here (use a sensor in %s); ignoring it",
+                entity_id, unit, accepted,
+            )
 
     # -- planning ----------------------------------------------------------------
 

@@ -6,6 +6,11 @@ publishes a GitHub release with this section as its notes, which is what HACS
 shows as the version. Versions follow [semantic versioning](https://semver.org):
 `0.x.0` for new features, `0.x.y` for fixes.
 
+## [0.1.1] - 2026-11-09
+
+### Fixed
+- **A battery sensor in amp-hours (Ah) was read as kWh.** A BMS reporting 300 Ah became a 300 kWh battery and the plan was about 20 times too big. Capacity and state-of-charge sensors are now only used in kWh, Wh (and % for the charge level); any other unit is ignored with a warning and the capacity from the settings is used. Amp-hours cannot be converted without the battery voltage.
+
 ## [0.1.0] - 2026-11-09
 
 First release. The battery planner of [OPCOM PZU](https://github.com/RaduSimonica/ha-opcom-pzu)

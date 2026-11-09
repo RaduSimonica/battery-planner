@@ -174,6 +174,31 @@ async def test_capacity_sensor_replaces_the_fixed_capacity(hass, entry, freezer)
     assert attrs["capacity_kwh"] == 12.0 and attrs["starting_energy_kwh"] == pytest.approx(9.6, abs=0.01)
 
 
+async def test_capacity_in_amp_hours_is_ignored(hass, entry, freezer, caplog):
+    """A BMS reporting 300 Ah must not become a 300 kWh battery."""
+    freezer.move_to(NOW)
+    publish(hass, rows(since="2026-11-09T12:00:00+02:00"))
+    hass.states.async_set("sensor.soc", "50", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.cap", "300", {"unit_of_measurement": "Ah"})
+    hass.config_entries.async_update_entry(
+        entry, options={"battery_soc_entity": "sensor.soc", "battery_capacity_entity": "sensor.cap"}
+    )
+    await setup(hass, entry)
+    attrs = hass.states.get(GAIN).attributes
+    assert attrs["capacity_kwh"] == 10.0 and attrs["starting_energy_kwh"] == pytest.approx(5.0)
+    assert caplog.text.count("sensor.cap reports Ah") == 1
+
+
+async def test_soc_in_amp_hours_is_ignored(hass, entry, freezer, caplog):
+    freezer.move_to(NOW)
+    publish(hass, rows(since="2026-11-09T12:00:00+02:00"))
+    hass.states.async_set("sensor.soc", "250", {"unit_of_measurement": "Ah"})
+    hass.config_entries.async_update_entry(entry, options={"battery_soc_entity": "sensor.soc"})
+    await setup(hass, entry)
+    assert hass.states.get(GAIN).attributes["starting_energy"] == "assumed empty"
+    assert "sensor.soc reports Ah" in caplog.text
+
+
 @pytest.mark.parametrize("state", ["unavailable", "unknown", "abc", "nan", "inf"])
 async def test_unusable_sensors_fall_back_to_an_empty_battery(hass, entry, freezer, state):
     freezer.move_to(NOW)
