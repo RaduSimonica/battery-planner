@@ -15,13 +15,14 @@
         "title": "Baterie",
         "description": "Folosită pentru a planifica când se merită să cumperi ieftin și să vinzi scump, pe baza prețurilor tale de cumpărare și vânzare.\n\nUn kWh vândut trebuie cumpărat cu mai puțin de: *preț de vânzare − cost de degradare*, înmulțit cu randamentul.\n\n**Bateria ta reală (opțional):** alege un senzor de nivel de încărcare (%, Wh sau kWh) ca planul de azi să pornească de la energia stocată efectiv, și opțional un senzor de capacitate (Wh sau kWh) care înlocuiește capacitatea fixă de mai jos. Fără ele, planul presupune bateria goală.",
         "data": {
-          "battery_capacity_kwh": "Capacitate utilizabilă",
+          "battery_capacity_kwh": "Capacitatea bateriei",
           "battery_charge_power_kw": "Putere maximă de încărcare",
           "battery_discharge_power_kw": "Putere maximă de descărcare",
           "battery_round_trip_efficiency_pct": "Randament dus-întors",
           "battery_degradation_per_kwh": "Cost de degradare per kWh",
           "battery_soc_entity": "Senzor nivel de încărcare (opțional)",
-          "battery_capacity_entity": "Senzor capacitate (opțional)"
+          "battery_capacity_entity": "Senzor capacitate (opțional)",
+          "battery_usable_pct": "Procent din baterie folosit"
         },
         "data_description": {
           "battery_charge_power_kw": "Cea mai mare putere pe care bateria o poate prelua din rețea, în kW, la nivelul rețelei. 300 W = 0,3 kW.",
@@ -29,7 +30,8 @@
           "battery_round_trip_efficiency_pct": "Cât din energia luată din rețea revine: cumpărare → stocare → vânzare. 85-95% e tipic pentru baterii cu litiu.",
           "battery_degradation_per_kwh": "Uzura bateriei per kWh livrat, în {currency}. Aproximativ prețul bateriei per kWh ÷ cicluri de viață (ex. 1500 ÷ 6000 = 0,25).",
           "battery_soc_entity": "Procent, Wh sau kWh. Folosit pentru planul de azi.",
-          "battery_capacity_entity": "Capacitate utilizabilă în Wh sau kWh. Înlocuiește capacitatea fixă."
+          "battery_capacity_entity": "Capacitate utilizabilă în Wh sau kWh. Înlocuiește capacitatea fixă.",
+          "battery_usable_pct": "Planificatorul lucrează doar cu acest procent din capacitate. Restul este o rezervă la baza bateriei care nu se vinde niciodată (curent de rezervă, consumul tău). 50% dintr-o baterie de 10 kWh înseamnă 5 kWh de planificat și 5 kWh păstrați."
         }
       }
     },
@@ -48,7 +50,8 @@
         "menu_options": {
           "source": "Sursa prețurilor",
           "battery": "Baterie",
-          "finish": "Salvează și închide"
+          "finish": "Salvează și închide",
+          "general": "Cronometre"
         }
       },
       "source": {
@@ -65,13 +68,14 @@
         "title": "Baterie",
         "description": "Folosită pentru a planifica când se merită să cumperi ieftin și să vinzi scump, pe baza prețurilor tale de cumpărare și vânzare.\n\nUn kWh vândut trebuie cumpărat cu mai puțin de: *preț de vânzare − cost de degradare*, înmulțit cu randamentul.\n\n**Bateria ta reală (opțional):** alege un senzor de nivel de încărcare (%, Wh sau kWh) ca planul de azi să pornească de la energia stocată efectiv, și opțional un senzor de capacitate (Wh sau kWh) care înlocuiește capacitatea fixă de mai jos. Fără ele, planul presupune bateria goală.",
         "data": {
-          "battery_capacity_kwh": "Capacitate utilizabilă",
+          "battery_capacity_kwh": "Capacitatea bateriei",
           "battery_charge_power_kw": "Putere maximă de încărcare",
           "battery_discharge_power_kw": "Putere maximă de descărcare",
           "battery_round_trip_efficiency_pct": "Randament dus-întors",
           "battery_degradation_per_kwh": "Cost de degradare per kWh",
           "battery_soc_entity": "Senzor nivel de încărcare (opțional)",
-          "battery_capacity_entity": "Senzor capacitate (opțional)"
+          "battery_capacity_entity": "Senzor capacitate (opțional)",
+          "battery_usable_pct": "Procent din baterie folosit"
         },
         "data_description": {
           "battery_charge_power_kw": "Cea mai mare putere pe care bateria o poate prelua din rețea, în kW, la nivelul rețelei. 300 W = 0,3 kW.",
@@ -79,7 +83,18 @@
           "battery_round_trip_efficiency_pct": "Cât din energia luată din rețea revine: cumpărare → stocare → vânzare. 85-95% e tipic pentru baterii cu litiu.",
           "battery_degradation_per_kwh": "Uzura bateriei per kWh livrat, în {currency}. Aproximativ prețul bateriei per kWh ÷ cicluri de viață (ex. 1500 ÷ 6000 = 0,25).",
           "battery_soc_entity": "Procent, Wh sau kWh. Folosit pentru planul de azi.",
-          "battery_capacity_entity": "Capacitate utilizabilă în Wh sau kWh. Înlocuiește capacitatea fixă."
+          "battery_capacity_entity": "Capacitate utilizabilă în Wh sau kWh. Înlocuiește capacitatea fixă.",
+          "battery_usable_pct": "Planificatorul lucrează doar cu acest procent din capacitate. Restul este o rezervă la baza bateriei care nu se vinde niciodată (curent de rezervă, consumul tău). 50% dintr-o baterie de 10 kWh înseamnă 5 kWh de planificat și 5 kWh păstrați."
+        }
+      },
+      "general": {
+        "title": "Cronometre",
+        "description": "Cât de departe în viitor caută senzorii *Timp până la cel mai mic preț* și *Timp până la cel mai bun preț de vânzare*.",
+        "data": {
+          "timer_horizon_hours": "Orizont"
+        },
+        "data_description": {
+          "timer_horizon_hours": "Ore de acum încolo, 1 până la 48. Dacă prețurile de mâine nu sunt publicate, se caută doar în ce se știe."
         }
       }
     },
@@ -108,6 +123,30 @@
           "discharge": "Descărcare",
           "idle": "Repaus"
         }
+      },
+      "energy_to_charge_today": {
+        "name": "Energie de încărcat azi"
+      },
+      "energy_to_export_today": {
+        "name": "Energie de exportat azi"
+      },
+      "projected_soc_today": {
+        "name": "Starea de încărcare estimată azi"
+      },
+      "energy_to_charge_tomorrow": {
+        "name": "Energie de încărcat mâine"
+      },
+      "energy_to_export_tomorrow": {
+        "name": "Energie de exportat mâine"
+      },
+      "projected_soc_tomorrow": {
+        "name": "Starea de încărcare estimată mâine"
+      },
+      "time_to_cheapest_price": {
+        "name": "Timp până la cel mai mic preț"
+      },
+      "time_to_best_sell_price": {
+        "name": "Timp până la cel mai bun preț de vânzare"
       }
     },
     "binary_sensor": {

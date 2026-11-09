@@ -24,7 +24,9 @@ from .const import (
     CONF_BATTERY_DISCHARGE_POWER,
     CONF_BATTERY_EFFICIENCY,
     CONF_BATTERY_SOC_ENTITY,
+    CONF_BATTERY_USABLE,
     CONF_PRICE_ENTITY,
+    CONF_TIMER_HORIZON,
     DOMAIN,
 )
 from .prices import currency_of, parse_prices
@@ -48,6 +50,7 @@ def battery_schema() -> dict:
         vol.Required(CONF_BATTERY_DISCHARGE_POWER): _num(0.01, 10000, 0.01, "kW"),
         vol.Required(CONF_BATTERY_EFFICIENCY): _num(1, 100, 0.5, "%"),
         vol.Required(CONF_BATTERY_DEGRADATION): _num(0, 100, 0.001),
+        vol.Required(CONF_BATTERY_USABLE, default=100): _num(1, 100, 1, "%"),
         vol.Optional(CONF_BATTERY_SOC_ENTITY): _SENSOR,
         vol.Optional(CONF_BATTERY_CAPACITY_ENTITY): _SENSOR,
     }
@@ -127,7 +130,7 @@ class BatteryPlannerOptionsFlow(OptionsFlow):
             self._options = dict(self.config_entry.options)
             self._data = dict(self.config_entry.data)
             self._loaded = True
-        return self.async_show_menu(step_id="init", menu_options=["source", "battery", "finish"])
+        return self.async_show_menu(step_id="init", menu_options=["source", "battery", "general", "finish"])
 
     async def async_step_finish(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if self._data != dict(self.config_entry.data):
@@ -148,6 +151,18 @@ class BatteryPlannerOptionsFlow(OptionsFlow):
             step_id="source",
             data_schema=self.add_suggested_values_to_schema(schema, self._data),
             errors=errors,
+        )
+
+    async def async_step_general(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        schema = {vol.Required(CONF_TIMER_HORIZON): _num(1, 48, 1, "h")}
+        if user_input is not None:
+            self._options |= {CONF_TIMER_HORIZON: int(user_input[CONF_TIMER_HORIZON])}
+            return await self.async_step_init()
+        return self.async_show_form(
+            step_id="general",
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(schema), _suggested(schema, self._options)
+            ),
         )
 
     async def async_step_battery(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

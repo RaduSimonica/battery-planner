@@ -51,6 +51,17 @@ It is only worth cycling when that is positive. The planner finds the best sched
 | Net gain per kWh today / tomorrow | Net gain per kWh sold |
 | Action | `charge` / `discharge` / `idle` right now, for automations |
 | Arbitrage profitable today / tomorrow | Binary sensors |
+| Energy to charge today / tomorrow | kWh the plan draws from the grid; the `windows` attribute lists when, with each window's kWh and average price |
+| Energy to export today / tomorrow | kWh the plan delivers to the grid, with its `windows` |
+| Projected state of charge today / tomorrow | Battery level (%) at the end of the day if the plan is followed. Attributes: `end_kwh`, `peak_kwh`, `peak_at` and a `curve` (time, kWh, %) for charts. Today starts from your real level, tomorrow from empty |
+| Time to cheapest price | Minutes until the cheapest *buy* price starts (`0` = now); `at`, `ends_at` and `price` in the attributes |
+| Time to best sell price | Minutes until the highest *sell* price starts |
+
+The two timers look ahead 24 hours by default (*Configure → Timers*, 1 to 48 hours). They tick every minute.
+
+### Using only part of the battery
+
+*Share of the battery to use* (battery page, default 100%) keeps the rest as a reserve at the bottom that is never sold: backup power or your own use. At 50% of a 10 kWh battery the planner works with 5 kWh. With a state-of-charge sensor only the energy *above* the reserve counts, so a battery at or below the reserve has nothing to sell.
 
 Not financial advice: results depend on your inputs and on the prices the source publishes.
 

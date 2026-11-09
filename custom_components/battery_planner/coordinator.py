@@ -16,7 +16,13 @@ from homeassistant.util import dt as dt_util
 
 from . import settings
 from .arbitrage import BatteryParams, Plan, Slot, plan
-from .const import CONF_BATTERY_CAPACITY_ENTITY, CONF_BATTERY_SOC_ENTITY, CONF_PRICE_ENTITY, DOMAIN
+from .const import (
+    CONF_BATTERY_CAPACITY_ENTITY,
+    CONF_BATTERY_SOC_ENTITY,
+    CONF_BATTERY_USABLE,
+    CONF_PRICE_ENTITY,
+    DOMAIN,
+)
 from .prices import PricePoint, PriceSeries, currency_of, local_day_bounds, parse_prices
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,6 +31,17 @@ _LOGGER = logging.getLogger(__name__)
 _CAPACITY_UNITS: dict[str | None, float] = {None: 1.0, "kWh": 1.0, "Wh": 0.001}
 
 UNAVAILABLE = ("unknown", "unavailable")
+
+
+@dataclass(frozen=True, slots=True)
+class BatteryState:
+    """What the planner may use, and what it must leave alone."""
+
+    params: BatteryParams  # capacity_kwh is the usable share
+    energy_kwh: float  # available above the reserve, 0..usable
+    source: str  # "sensor" | "assumed empty"
+    total_kwh: float  # the whole battery
+    reserve_kwh: float  # never touched
 
 
 @dataclass(slots=True)
@@ -123,33 +140,46 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             return None
         return value, state.attributes.get("unit_of_measurement")
 
-    def battery_inputs(self) -> tuple[BatteryParams, float, str]:
+    def battery_inputs(self) -> BatteryState:
         """Battery parameters and the energy it holds now, from the user's sensors.
 
         Falls back to the configured capacity and an empty battery when a sensor
-        is not set or not available.
+        is not set or not available. Only the usable share of the battery is
+        planned with; the rest is a reserve at the bottom that is never touched.
         """
         opts = self.config_entry.options
-        params = self.battery
+        total = self.battery.capacity_kwh
         capacity = self._read_number(opts.get(CONF_BATTERY_CAPACITY_ENTITY))
         if capacity and capacity[0] > 0:
             factor = _CAPACITY_UNITS.get(capacity[1])
             if factor is None:
                 self._warn_unit(opts[CONF_BATTERY_CAPACITY_ENTITY], capacity[1], "kWh or Wh")
             else:
-                params = replace(params, capacity_kwh=capacity[0] * factor)
-        soc = self._read_number(opts.get(CONF_BATTERY_SOC_ENTITY))
+                total = capacity[0] * factor
+        share = min(max(settings.get(opts, CONF_BATTERY_USABLE) / 100, 0.01), 1.0)
+        usable = total * share
+        reserve = total - usable
+        params = replace(self.battery, capacity_kwh=usable)
+        stored = self._stored_energy(total)
+        source = "assumed empty" if stored is None else "sensor"
+        available = min(max((stored or 0.0) - reserve, 0.0), usable)
+        return BatteryState(params, available, source, total, reserve)
+
+    def _stored_energy(self, total_kwh: float) -> float | None:
+        """Energy in the whole battery (kWh) from the charge sensor, if usable."""
+        entity = self.config_entry.options.get(CONF_BATTERY_SOC_ENTITY)
+        soc = self._read_number(entity)
         if not soc:
-            return params, 0.0, "assumed empty"
+            return None
         value, unit = soc
         if unit in (None, "%"):
-            energy = min(max(value, 0.0), 100.0) / 100 * params.capacity_kwh
+            stored = min(max(value, 0.0), 100.0) / 100 * total_kwh
         elif unit in _CAPACITY_UNITS:
-            energy = value * _CAPACITY_UNITS[unit]
+            stored = value * _CAPACITY_UNITS[unit]
         else:
-            self._warn_unit(opts[CONF_BATTERY_SOC_ENTITY], unit, "%, kWh or Wh")
-            return params, 0.0, "assumed empty"
-        return params, min(max(energy, 0.0), params.capacity_kwh), "sensor"
+            self._warn_unit(entity, unit, "%, kWh or Wh")
+            return None
+        return min(max(stored, 0.0), total_kwh)
 
     def _warn_unit(self, entity_id: str, unit: str | None, accepted: str) -> None:
         """Say once per sensor that its unit cannot be used (e.g. Ah, which needs a voltage)."""
@@ -164,10 +194,10 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
 
     async def _async_update_data(self) -> PlanData:
         self._read_source()
-        params, energy, source = self.battery_inputs()
+        battery = self.battery_inputs()
         now = datetime.now(timezone.utc)
         plans, info, points = await self.hass.async_add_executor_job(
-            self._build_plans, self._series, params, energy, source, now
+            self._build_plans, self._series, battery, now
         )
         return PlanData(self._series, self._unit, plans, info, points)
 
@@ -180,7 +210,7 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         return [p for p in points if p.end - p.start == length]
 
     def _build_plans(
-        self, series: PriceSeries, params: BatteryParams, energy: float, source: str, now: datetime
+        self, series: PriceSeries, battery: BatteryState, now: datetime
     ) -> tuple[dict[int, Plan], dict[int, dict[str, Any]], dict[int, list[PricePoint]]]:
         """Today: the intervals still ahead, from the real battery level.
         Tomorrow: a full day, battery assumed empty (its level then is unknown).
@@ -204,12 +234,13 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
                 left = (first.end - max(now, first.start)) / (first.end - first.start)
                 slots[0] = replace(slots[0], fraction=left)
             hours = (points[0].end - points[0].start).total_seconds() / 3600
-            start_energy = energy if offset == 0 else 0.0
-            plans[offset] = plan(slots, hours, params, start_energy)
+            start_energy = battery.energy_kwh if offset == 0 else 0.0
+            plans[offset] = plan(slots, hours, battery.params, start_energy)
             covered[offset] = points
             info[offset] = {
-                "capacity_kwh": round(params.capacity_kwh, 2),
+                "capacity_kwh": round(battery.params.capacity_kwh, 2),
+                "reserve_kwh": round(battery.reserve_kwh, 2),
                 "starting_energy_kwh": round(start_energy, 2),
-                "starting_energy": source if offset == 0 else "assumed empty",
+                "starting_energy": battery.source if offset == 0 else "assumed empty",
             }
         return plans, info, covered

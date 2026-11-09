@@ -15,13 +15,14 @@
         "title": "Battery",
         "description": "Used to plan when buying cheap and selling dear pays off, using your buy and sell prices.\n\nA kWh sold must have been bought for less than: *sell price − degradation cost*, multiplied by the efficiency.\n\n**Your real battery (optional):** pick a state-of-charge sensor (%, Wh or kWh) so today's plan starts from what is actually stored, and optionally a capacity sensor (Wh or kWh) to replace the fixed capacity below. Without them the plan assumes an empty battery.",
         "data": {
-          "battery_capacity_kwh": "Usable capacity",
+          "battery_capacity_kwh": "Battery capacity",
           "battery_charge_power_kw": "Maximum charge power",
           "battery_discharge_power_kw": "Maximum discharge power",
           "battery_round_trip_efficiency_pct": "Round-trip efficiency",
           "battery_degradation_per_kwh": "Degradation cost per kWh",
           "battery_soc_entity": "State of charge sensor (optional)",
-          "battery_capacity_entity": "Capacity sensor (optional)"
+          "battery_capacity_entity": "Capacity sensor (optional)",
+          "battery_usable_pct": "Share of the battery to use"
         },
         "data_description": {
           "battery_charge_power_kw": "Most power the battery can draw from the grid, in kW at the grid side. 300 W = 0.3 kW.",
@@ -29,7 +30,8 @@
           "battery_round_trip_efficiency_pct": "Share of grid energy that comes back out: buy → store → sell. 85-95% is typical for lithium batteries.",
           "battery_degradation_per_kwh": "Battery wear per kWh delivered, in {currency}. Roughly battery price per kWh ÷ lifetime cycles (e.g. 1500 ÷ 6000 = 0.25).",
           "battery_soc_entity": "Percent, Wh or kWh. Used for today's plan.",
-          "battery_capacity_entity": "Usable capacity in Wh or kWh. Replaces the fixed capacity."
+          "battery_capacity_entity": "Usable capacity in Wh or kWh. Replaces the fixed capacity.",
+          "battery_usable_pct": "The planner only works with this share of the capacity. The rest is a reserve at the bottom that is never sold (backup power, your own use). 50% of a 10 kWh battery means 5 kWh to plan with and 5 kWh kept."
         }
       }
     },
@@ -48,7 +50,8 @@
         "menu_options": {
           "source": "Price source",
           "battery": "Battery",
-          "finish": "Save and close"
+          "finish": "Save and close",
+          "general": "Timers"
         }
       },
       "source": {
@@ -65,13 +68,14 @@
         "title": "Battery",
         "description": "Used to plan when buying cheap and selling dear pays off, using your buy and sell prices.\n\nA kWh sold must have been bought for less than: *sell price − degradation cost*, multiplied by the efficiency.\n\n**Your real battery (optional):** pick a state-of-charge sensor (%, Wh or kWh) so today's plan starts from what is actually stored, and optionally a capacity sensor (Wh or kWh) to replace the fixed capacity below. Without them the plan assumes an empty battery.",
         "data": {
-          "battery_capacity_kwh": "Usable capacity",
+          "battery_capacity_kwh": "Battery capacity",
           "battery_charge_power_kw": "Maximum charge power",
           "battery_discharge_power_kw": "Maximum discharge power",
           "battery_round_trip_efficiency_pct": "Round-trip efficiency",
           "battery_degradation_per_kwh": "Degradation cost per kWh",
           "battery_soc_entity": "State of charge sensor (optional)",
-          "battery_capacity_entity": "Capacity sensor (optional)"
+          "battery_capacity_entity": "Capacity sensor (optional)",
+          "battery_usable_pct": "Share of the battery to use"
         },
         "data_description": {
           "battery_charge_power_kw": "Most power the battery can draw from the grid, in kW at the grid side. 300 W = 0.3 kW.",
@@ -79,7 +83,18 @@
           "battery_round_trip_efficiency_pct": "Share of grid energy that comes back out: buy → store → sell. 85-95% is typical for lithium batteries.",
           "battery_degradation_per_kwh": "Battery wear per kWh delivered, in {currency}. Roughly battery price per kWh ÷ lifetime cycles (e.g. 1500 ÷ 6000 = 0.25).",
           "battery_soc_entity": "Percent, Wh or kWh. Used for today's plan.",
-          "battery_capacity_entity": "Usable capacity in Wh or kWh. Replaces the fixed capacity."
+          "battery_capacity_entity": "Usable capacity in Wh or kWh. Replaces the fixed capacity.",
+          "battery_usable_pct": "The planner only works with this share of the capacity. The rest is a reserve at the bottom that is never sold (backup power, your own use). 50% of a 10 kWh battery means 5 kWh to plan with and 5 kWh kept."
+        }
+      },
+      "general": {
+        "title": "Timers",
+        "description": "How far ahead the *Time to cheapest price* and *Time to best sell price* sensors look.",
+        "data": {
+          "timer_horizon_hours": "Look-ahead"
+        },
+        "data_description": {
+          "timer_horizon_hours": "Hours from now, 1 to 48. If tomorrow's prices are not published yet, only what is known is searched."
         }
       }
     },
@@ -108,6 +123,30 @@
           "discharge": "Discharge",
           "idle": "Idle"
         }
+      },
+      "energy_to_charge_today": {
+        "name": "Energy to charge today"
+      },
+      "energy_to_export_today": {
+        "name": "Energy to export today"
+      },
+      "projected_soc_today": {
+        "name": "Projected state of charge today"
+      },
+      "energy_to_charge_tomorrow": {
+        "name": "Energy to charge tomorrow"
+      },
+      "energy_to_export_tomorrow": {
+        "name": "Energy to export tomorrow"
+      },
+      "projected_soc_tomorrow": {
+        "name": "Projected state of charge tomorrow"
+      },
+      "time_to_cheapest_price": {
+        "name": "Time to cheapest price"
+      },
+      "time_to_best_sell_price": {
+        "name": "Time to best sell price"
       }
     },
     "binary_sensor": {

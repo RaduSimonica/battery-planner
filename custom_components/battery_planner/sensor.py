@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from math import ceil
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -13,11 +14,15 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.const import UnitOfEnergy, UnitOfTime
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_track_utc_time_change
 from homeassistant.util import dt as dt_util
 
+from . import settings
 from .arbitrage import Plan
+from .const import CONF_TIMER_HORIZON
 from .coordinator import PlanData, PlannerCoordinator
 from .entity import PlannerEntity
 
@@ -117,6 +122,72 @@ def _action_attrs(d: PlanData) -> dict[str, Any]:
     return {"next_change": _local(upcoming.start), "next_action": upcoming.action} if upcoming else {}
 
 
+def _windows(offset: int, action: str) -> Callable[[PlanData], dict[str, Any]]:
+    """The planned windows of one kind (charge or discharge) with their energy and price."""
+
+    def attrs(d: PlanData) -> dict[str, Any]:
+        plan, pts = d.plans.get(offset), d.points.get(offset)
+        if plan is None or not pts:
+            return {}
+        step = pts[0].end - pts[0].start
+        return {"windows": [b for b in _blocks(plan, step) if b["action"] == action]}
+
+    return attrs
+
+
+def _energy(offset: int, field: str) -> Callable[[PlanData], float | None]:
+    def value(d: PlanData) -> float | None:
+        plan = d.plans.get(offset)
+        return None if plan is None else round(getattr(plan, field), 2)
+
+    return value
+
+
+def _curve(d: PlanData, offset: int) -> list[tuple[datetime, float]] | None:
+    """(time, stored kWh of the whole battery) from the plan's start to its end."""
+    plan, pts, info = d.plans.get(offset), d.points.get(offset), d.info.get(offset)
+    if plan is None or not pts or not info or len(plan.soc) != len(pts) + 1:
+        return None
+    reserve = info["reserve_kwh"]
+    times = [p.start for p in pts] + [pts[-1].end]
+    return [(t, reserve + kwh) for t, kwh in zip(times, plan.soc)]
+
+
+def _soc_value(offset: int) -> Callable[[PlanData], float | None]:
+    def value(d: PlanData) -> float | None:
+        curve = _curve(d, offset)
+        if not curve:
+            return None
+        total = d.info[offset]["capacity_kwh"] + d.info[offset]["reserve_kwh"]
+        return round(curve[-1][1] / total * 100, 1) if total > 0 else None
+
+    return value
+
+
+def _soc_attrs(offset: int) -> Callable[[PlanData], dict[str, Any]]:
+    def attrs(d: PlanData) -> dict[str, Any]:
+        curve = _curve(d, offset)
+        if not curve:
+            return {}
+        info = d.info[offset]
+        total = info["capacity_kwh"] + info["reserve_kwh"]
+        peak_at, peak = max(curve, key=lambda c: (c[1], -c[0].timestamp()))  # earliest peak
+        return {
+            "end_kwh": round(curve[-1][1], 2),
+            "start_kwh": round(curve[0][1], 2),
+            "battery_kwh": round(total, 2),
+            "reserve_kwh": info["reserve_kwh"],
+            "peak_kwh": round(peak, 2),
+            "peak_at": _local(peak_at),
+            "curve": [
+                {"at": _local(t), "kwh": round(k, 3), "pct": round(k / total * 100, 1)}
+                for t, k in curve
+            ],
+        }
+
+    return attrs
+
+
 def _descriptions() -> list[PlannerSensorDescription]:
     out: list[PlannerSensorDescription] = []
     for day, offset in DAYS.items():
@@ -126,6 +197,19 @@ def _descriptions() -> list[PlannerSensorDescription]:
         out.append(PlannerSensorDescription(
             key=f"gain_per_kwh_{day}", unit_kind="price", suggested_display_precision=3,
             value_fn=_plan_value(offset, "gain_per_kwh_sold")))
+    for day, offset in DAYS.items():
+        out.append(PlannerSensorDescription(
+            key=f"energy_to_charge_{day}", device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, suggested_display_precision=2,
+            value_fn=_energy(offset, "energy_bought_kwh"), attrs_fn=_windows(offset, "charge")))
+        out.append(PlannerSensorDescription(
+            key=f"energy_to_export_{day}", device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, suggested_display_precision=2,
+            value_fn=_energy(offset, "energy_sold_kwh"), attrs_fn=_windows(offset, "discharge")))
+        out.append(PlannerSensorDescription(
+            key=f"projected_soc_{day}", device_class=SensorDeviceClass.BATTERY,
+            native_unit_of_measurement="%", suggested_display_precision=0,
+            value_fn=_soc_value(offset), attrs_fn=_soc_attrs(offset)))
     out.append(PlannerSensorDescription(
         key="action", device_class=SensorDeviceClass.ENUM,
         options=["charge", "discharge", "idle"], value_fn=_action, attrs_fn=_action_attrs))
@@ -137,11 +221,15 @@ async def async_setup_entry(
 ) -> None:
     coordinator: PlannerCoordinator = entry.runtime_data
     async_add_entities(PlannerSensor(coordinator, d) for d in _descriptions())
+    async_add_entities(
+        [CountdownSensor(coordinator, "time_to_cheapest_price", "buy", cheapest=True),
+         CountdownSensor(coordinator, "time_to_best_sell_price", "sell", cheapest=False)]
+    )
 
 
 class PlannerSensor(PlannerEntity, SensorEntity):
     entity_description: PlannerSensorDescription
-    _unrecorded_attributes = frozenset({"schedule"})
+    _unrecorded_attributes = frozenset({"schedule", "windows", "curve"})
 
     def __init__(self, coordinator: PlannerCoordinator, description: PlannerSensorDescription) -> None:
         super().__init__(coordinator, description.key)
@@ -155,7 +243,7 @@ class PlannerSensor(PlannerEntity, SensorEntity):
             return data.unit
         if kind == "money":
             return data.currency  # only a real currency code, never free text
-        return None
+        return self.entity_description.native_unit_of_measurement
 
     @property
     def device_class(self) -> SensorDeviceClass | None:
@@ -171,3 +259,56 @@ class PlannerSensor(PlannerEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any] | None:
         fn = self.entity_description.attrs_fn
         return fn(self.coordinator.data) if fn else None
+
+
+class CountdownSensor(PlannerEntity, SensorEntity):
+    """Minutes until the cheapest buy price or the best sell price starts.
+
+    The state changes every minute, so the entity keeps its own timer instead of
+    making every sensor update that often.
+    """
+
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_suggested_display_precision = 0
+    _unrecorded_attributes = frozenset({"at", "ends_at", "price"})
+
+    def __init__(self, coordinator: PlannerCoordinator, key: str, side: str, *, cheapest: bool) -> None:
+        super().__init__(coordinator, key)
+        self._side = side
+        self._cheapest = cheapest
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(async_track_utc_time_change(self.hass, self._minute, second=1))
+
+    @callback
+    def _minute(self, _now: datetime) -> None:
+        self.async_write_ha_state()
+
+    def _best(self):
+        now = dt_util.utcnow()
+        hours = settings.get(self.coordinator.config_entry.options, CONF_TIMER_HORIZON)
+        points = [
+            p for p in self.coordinator.data.series.window(now, now + timedelta(hours=hours))
+            if p.end > now
+        ]
+        if not points:
+            return now, None
+        price = lambda p: getattr(p, self._side)  # noqa: E731
+        key = (lambda p: (price(p), p.start)) if self._cheapest else (lambda p: (-price(p), p.start))
+        return now, min(points, key=key)
+
+    @property
+    def native_value(self) -> int | None:
+        now, best = self._best()
+        if best is None:
+            return None
+        return 0 if best.start <= now else ceil((best.start - now).total_seconds() / 60)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        _, best = self._best()
+        if best is None:
+            return None
+        return {"at": _local(best.start), "ends_at": _local(best.end), "price": getattr(best, self._side)}

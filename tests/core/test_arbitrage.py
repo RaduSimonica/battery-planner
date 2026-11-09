@@ -226,3 +226,37 @@ def test_equal_schedules_never_churn():
     """Selling stored energy cheaply and buying it back is not 'equally good': it is nothing."""
     p = plan(slots([0.1] * 4 + [2.0] * 4), 0.25, BatteryParams(4, 20, 20, 1.0, 0), initial_kwh=4)
     assert p.energy_bought_kwh == 0 and all(s.action == "discharge" for s in p.slots)
+
+
+# -- state-of-charge curve ----------------------------------------------------
+
+
+def _day(prices):
+    from datetime import datetime, timedelta, timezone
+
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    return [Slot(t0 + timedelta(hours=i), p, p) for i, p in enumerate(prices)]
+
+
+def test_soc_curve_follows_the_plan():
+    from math import sqrt
+
+    import pytest
+
+    params = BatteryParams(capacity_kwh=10, max_charge_kw=5, max_discharge_kw=5,
+                           round_trip_efficiency=0.81, degradation_per_kwh=0.0)
+    result = plan(_day([0.1, 0.1, 0.1, 2.0, 2.0, 2.0]), 1.0, params, initial_kwh=2.0)
+    assert result.profitable and len(result.soc) == 7  # one more than the slots
+    assert result.soc[0] == 2.0
+    assert all(0 <= v <= 10 + 1e-9 for v in result.soc)
+    one_way = sqrt(0.81)
+    assert result.soc[-1] == pytest.approx(
+        2.0 + result.energy_bought_kwh * one_way - result.energy_sold_kwh / one_way, abs=1e-6
+    )
+    peak = max(range(7), key=lambda i: result.soc[i])
+    assert result.soc[peak] == max(result.soc) and peak in (3,)  # full just before the dear hours
+
+
+def test_soc_curve_is_flat_when_nothing_pays():
+    result = plan(_day([0.01, 0.01, 0.01, 0.01]), 1.0, BatteryParams(), initial_kwh=3.0)
+    assert not result.profitable and result.soc == [3.0] * 5

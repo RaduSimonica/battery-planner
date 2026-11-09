@@ -29,7 +29,7 @@ async def test_user_flow(hass, freezer):
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Battery Planner (RON)"
     assert result["data"] == {"price_entity": SOURCE}
-    assert result["options"] == BATTERY  # empty optional sensors are simply not stored
+    assert result["options"] == {**BATTERY, "battery_usable_pct": 100.0}  # empty optional sensors are simply not stored
 
 
 async def test_battery_sensors_can_be_set_at_setup(hass):
@@ -106,3 +106,13 @@ async def test_changing_the_price_source(hass, entry, freezer):
     assert entry.data["price_entity"] == "sensor.other_prices"
     assert entry.runtime_data.price_entity == "sensor.other_prices"
     assert hass.states.get("sensor.battery_planner_net_gain_tomorrow").state not in ("unknown", "unavailable")
+
+
+async def test_timer_page_saves_the_look_ahead(hass, entry, freezer):
+    freezer.move_to(NOW)
+    publish(hass, rows())
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    flow = await hass.config_entries.options.async_configure(flow["flow_id"], {"next_step_id": "general"})
+    ok = await hass.config_entries.options.async_configure(flow["flow_id"], {"timer_horizon_hours": 12.0})
+    done = await hass.config_entries.options.async_configure(ok["flow_id"], {"next_step_id": "finish"})
+    assert done["data"]["timer_horizon_hours"] == 12 and isinstance(done["data"]["timer_horizon_hours"], int)
