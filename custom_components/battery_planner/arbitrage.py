@@ -62,6 +62,9 @@ class Plan:
     break_even_sell_price: float | None = None  # sell price needed above the best buy
     cycles: float = 0.0
     slots: list[PlanSlot] = field(default_factory=list)
+    # Stored energy (kWh) before each slot, and after the last: len(slots_in) + 1
+    # values, the first being the starting level. Flat when nothing is planned.
+    soc: list[float] = field(default_factory=list)
 
 
 def break_even_sell_price(buy_price: float, params: BatteryParams) -> float:
@@ -127,9 +130,13 @@ def plan(
             choice[t][s] = best_move
 
     soc = min(units, round(initial_kwh / step))
+    level = initial_kwh
+    curve = [level]
     bought = sold = 0.0
     for t, slot in enumerate(slots):
         move = choice[t][soc]
+        level = min(max(level + move * step, 0.0), params.capacity_kwh)
+        curve.append(level)
         if move > 0:
             grid = move * step / eff_one_way
             bought += grid
@@ -144,7 +151,9 @@ def plan(
     result.profitable = result.net_gain > 1e-9 and bool(result.slots)
     if not result.profitable:
         result.slots, result.net_gain = [], 0.0
+        result.soc = [initial_kwh] * (n + 1)
         return result
+    result.soc = curve
     result.energy_bought_kwh = bought
     result.energy_sold_kwh = sold
     result.gain_per_kwh_sold = result.net_gain / sold
