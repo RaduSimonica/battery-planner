@@ -1,0 +1,35 @@
+name: Version
+
+# Every pull request into main must carry a new version, and merging it
+# publishes that version as a GitHub release (which HACS shows and installs).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # also fetches the release tags
+      - run: python3 .github/scripts/version.py check
+
+  release:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: python3 .github/scripts/version.py release
+        env:
+          GH_TOKEN: ${{ github.token }}
