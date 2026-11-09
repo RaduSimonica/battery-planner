@@ -1,0 +1,13 @@
+{
+  "domain": "battery_planner",
+  "name": "Battery Planner",
+  "codeowners": ["@RaduSimonica"],
+  "config_flow": true,
+  "documentation": "https://github.com/RaduSimonica/battery-planner",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/RaduSimonica/battery-planner/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}
