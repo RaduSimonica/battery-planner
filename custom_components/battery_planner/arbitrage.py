@@ -13,7 +13,9 @@ The planner is a dynamic programme over a discretised state of charge, which
 handles capacity and power limits and multiple cycles per day. The battery
 starts with ``initial_kwh`` (default empty) and may end at any level; energy
 left over at the end is worth nothing, so nothing is bought just to sit there.
-Energy already in the battery counts as free, as its cost is sunk. When two
+A reserve (``min_kwh``) is never discharged, though the battery may start below it
+and charging it back up is allowed. Energy already in the battery counts as free,
+as its cost is sunk. When two
 schedules earn the same, doing nothing wins, so the planner never churns.
 """
 
@@ -28,11 +30,12 @@ MAX_SOC_UNITS = 300
 
 @dataclass(frozen=True, slots=True)
 class BatteryParams:
-    capacity_kwh: float = 10.0  # usable
+    capacity_kwh: float = 10.0  # the whole battery
     max_charge_kw: float = 5.0  # drawn from the grid
     max_discharge_kw: float = 5.0  # delivered to the grid
     round_trip_efficiency: float = 0.90  # 0 < x <= 1, grid -> battery -> grid
     degradation_per_kwh: float = 0.15  # cost per kWh delivered to the grid
+    min_kwh: float = 0.0  # reserve: never discharged below this level (charging is always allowed)
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +99,7 @@ def plan(
     units = int(capacity / step + 1e-9)
     if units < 1:
         return result
+    floor = min(units, max(0, round(min(params.min_kwh, params.capacity_kwh) / step)))
     max_charge = max(1, int(charge_cap / step + 1e-9))
     max_discharge = max(1, int(discharge_cap / step + 1e-9))
 
@@ -113,7 +117,8 @@ def plan(
         for s in range(units + 1):
             # Idle first, so a tie never causes pointless cycling.
             best, best_move = value[t + 1][s], 0
-            for move in range(-min(s, slot_discharge), min(units - s, slot_charge) + 1):
+            # Discharging stops at the reserve; a battery already below it only charges.
+            for move in range(-min(max(s - floor, 0), slot_discharge), min(units - s, slot_charge) + 1):
                 nxt = value[t + 1][s + move]
                 if move == 0 or nxt == neg:
                     continue

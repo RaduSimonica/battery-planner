@@ -28,11 +28,44 @@ one line to add.
   on Lit (as Home Assistant does) or plain web components. Keep the apexcharts
   examples as the fallback.
 
-## 2. [Battery Planner] Solar and house consumption in the plan
+## 2. [Battery Planner] Planning modes
+
+Different people want different things from the battery, so the plan follows a
+mode chosen in the options (and changeable at any time, for example from an
+automation or a select entity):
+
+- **Max profit** (today's behaviour): only buys cheap and sells dear. The house
+  is ignored; the battery is a trading asset.
+- **Cheap self-consumption**: the battery exists to power the house at the
+  lowest cost. It charges when the buy price is low and holds the energy for
+  the hours when the house would otherwise pay the most, and it does not export
+  to the grid for profit. The value of a stored kWh is the *buy* price it
+  avoids, not the sell price.
+- **Balanced**: a bit of both. The house's needs are covered first (a reserve
+  for the expected consumption until the next cheap window), and whatever is
+  left over may be traded for profit. A slider decides how much is kept for the
+  house.
+
+How it fits the planner: the three modes are the same dynamic programme with a
+different value for a kWh leaving the battery (sell price, buy price avoided, or
+a blend) and a different rule for what may be exported. They need the house
+consumption forecast of item 3, so build them together; the max profit mode
+works without it. Tests: in max profit mode nothing changes; in self-consumption
+mode nothing is exported; balanced lies between the two in energy exported and in
+gain.
+
+## 3. [Battery Planner] Solar and house consumption in the plan
 
 Take the user's solar production, consumption and solar forecast into account,
 so the planner knows how much of the battery can really be sold, and does not
 sell energy the house will need later and buy back at a higher price.
+
+**What this is for.** Most users of a battery also have solar panels. The
+planner should charge the battery from the solar surplus and **avoid exporting
+to the grid when the price is low**, store that energy, and sell it later when the
+price is higher (or use it in the house when buying would cost more). Surplus
+solar costs nothing to store, so it is the cheapest energy the battery can get.
+Grid charging then only fills what solar will not.
 
 **Why the current planner is not enough.** It values every kWh at the market:
 buy to charge, sell to discharge. With solar and a house load, energy that
@@ -92,7 +125,7 @@ projected state-of-charge curve including solar and load.
   solar = load + battery change) holds in every interval; the consumption
   profile learned from statistics matches a hand-made series.
 
-Build this before the custom cards (item 1), so the cards can show the house reserve too.
+Build this together with the modes (item 2) and before the custom cards (item 1), so the cards can show the house reserve too.
 
 ## Price sources besides an entity
 
@@ -100,7 +133,7 @@ Today the price source is a sensor that follows the contract. Add:
 
 - **Fixed prices:** one buy and one sell price, or a time-of-use schedule
   (periods with their own prices), for users without a spot-price source. It
-  matters most together with item 2 (solar and consumption), where the value of
+  matters most together with item 3 (solar and consumption), where the value of
   stored energy is the buy price avoided.
 - **Adapters** for popular sources that use another attribute layout (for
   example Nord Pool's `raw_today` / `raw_tomorrow`), with a tariff step (formula

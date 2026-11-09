@@ -6,6 +6,13 @@ publishes a GitHub release with this section as its notes, which is what HACS
 shows as the version. Versions follow [semantic versioning](https://semver.org):
 `0.x.0` for new features, `0.x.y` for fixes.
 
+## [0.2.1] - 2026-11-09
+
+### Fixed
+- **A battery below its reserve is handled properly.** With a share below 100% and the charge under the reserve (say 25% with 50% reserved), the plan used to start from "nothing to sell" and could count energy that only refills the reserve as sellable. The reserve is now a floor: the plan starts from the real level, may charge at any level, and only sells what is above the floor.
+- The projected state of charge now starts at the real level instead of the reserve, and `starting_energy_kwh` is the whole battery's energy (a new `available_kwh` attribute is what can be sold).
+- With no charge sensor, and for tomorrow's plan, the battery is assumed to hold only its reserve.
+
 ## [0.2.0] - 2026-11-09
 
 ### Added

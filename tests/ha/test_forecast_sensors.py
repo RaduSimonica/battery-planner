@@ -20,17 +20,19 @@ def feed(hass, level="100", unit="%"):
 
 
 @pytest.mark.parametrize(
-    "level, available",
-    [("100", 5.0), ("60", 1.0), ("50", 0.0), ("40", 0.0)],  # a 10 kWh battery, 5 kWh reserved
+    "level, stored, available",
+    # a 10 kWh battery with 5 kWh reserved
+    [("100", 10.0, 5.0), ("60", 6.0, 1.0), ("50", 5.0, 0.0), ("40", 4.0, 0.0), ("25", 2.5, 0.0)],
 )
-async def test_only_the_energy_above_the_reserve_is_available(hass, entry, freezer, level, available):
+async def test_only_the_energy_above_the_reserve_is_available(hass, entry, freezer, level, stored, available):
     freezer.move_to(NOW)
     feed(hass, level)
     hass.config_entries.async_update_entry(entry, options={**SOC, "battery_usable_pct": 50})
     await setup(hass, entry)
     attrs = hass.states.get(GAIN).attributes
     assert attrs["capacity_kwh"] == 5.0 and attrs["reserve_kwh"] == 5.0
-    assert attrs["starting_energy_kwh"] == pytest.approx(available)
+    assert attrs["starting_energy_kwh"] == pytest.approx(stored)  # what the battery really holds
+    assert attrs["available_kwh"] == pytest.approx(available)  # what may be sold
 
 
 async def test_the_reserve_is_never_sold(hass, entry, freezer):
@@ -40,6 +42,45 @@ async def test_the_reserve_is_never_sold(hass, entry, freezer):
     await setup(hass, entry)
     soc = hass.states.get("sensor.battery_planner_projected_state_of_charge_today")
     assert min(c["kwh"] for c in soc.attributes["curve"]) >= 5.0 - 1e-6  # the bottom half stays
+
+
+async def test_below_the_reserve_nothing_is_sold_and_the_curve_is_true(hass, entry, freezer):
+    freezer.move_to(NOW)
+    publish(hass, rows(low=0.9, high=0.9, since="2026-11-09T12:00:00+02:00"))  # flat: nothing pays
+    hass.states.async_set("sensor.soc", "25", {"unit_of_measurement": "%"})  # 2.5 kWh of 10
+    hass.config_entries.async_update_entry(entry, options={**SOC, "battery_usable_pct": 50})
+    await setup(hass, entry)
+    assert hass.states.get("sensor.battery_planner_energy_to_export_today").state == "0.0"
+    soc = hass.states.get("sensor.battery_planner_projected_state_of_charge_today").attributes
+    assert soc["curve"][0]["kwh"] == pytest.approx(2.5)  # the real level, not the reserve
+    assert all(c["kwh"] == pytest.approx(2.5) for c in soc["curve"])
+
+
+async def test_charging_up_to_the_reserve_is_not_counted_as_sellable(hass, entry, freezer):
+    """At 25% with a 50% reserve, the first 2.5 kWh bought only refill the reserve."""
+    freezer.move_to(NOW)
+    feed(hass, "25")  # the evening is dear: buying now and selling then pays
+    hass.config_entries.async_update_entry(entry, options={**SOC, "battery_usable_pct": 50})
+    await setup(hass, entry)
+    bought = float(hass.states.get("sensor.battery_planner_energy_to_charge_today").state)
+    sold = float(hass.states.get("sensor.battery_planner_energy_to_export_today").state)
+    assert bought > 0
+    # Sold energy comes from what is above the reserve: bought, minus the 2.5 kWh refill (and losses).
+    assert sold < bought
+    soc = hass.states.get("sensor.battery_planner_projected_state_of_charge_today").attributes
+    levels = [c["kwh"] for c in soc["curve"]]
+    assert all(b >= 5.0 - 1e-6 for a, b in zip(levels, levels[1:]) if b < a)  # no discharge below it
+
+
+async def test_tomorrow_starts_at_the_reserve(hass, entry, freezer):
+    freezer.move_to(NOW)
+    feed(hass, "100")
+    hass.config_entries.async_update_entry(entry, options={**SOC, "battery_usable_pct": 50})
+    await setup(hass, entry)
+    attrs = hass.states.get("sensor.battery_planner_net_gain_tomorrow").attributes
+    assert attrs["starting_energy_kwh"] == 5.0 and attrs["available_kwh"] == 0.0
+    curve = hass.states.get("sensor.battery_planner_projected_state_of_charge_tomorrow").attributes["curve"]
+    assert min(c["kwh"] for c in curve) >= 5.0 - 1e-6  # never below the reserve
 
 
 async def test_full_share_changes_nothing(hass, entry, freezer):

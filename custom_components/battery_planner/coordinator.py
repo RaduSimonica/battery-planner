@@ -37,11 +37,20 @@ UNAVAILABLE = ("unknown", "unavailable")
 class BatteryState:
     """What the planner may use, and what it must leave alone."""
 
-    params: BatteryParams  # capacity_kwh is the usable share
-    energy_kwh: float  # available above the reserve, 0..usable
+    params: BatteryParams  # capacity_kwh is the whole battery, min_kwh the reserve
+    energy_kwh: float  # stored now, in the whole battery (may be below the reserve)
     source: str  # "sensor" | "assumed empty"
     total_kwh: float  # the whole battery
-    reserve_kwh: float  # never touched
+    reserve_kwh: float  # never discharged
+
+    @property
+    def usable_kwh(self) -> float:
+        return self.total_kwh - self.reserve_kwh
+
+    @property
+    def available_kwh(self) -> float:
+        """What can be sold: the energy above the reserve."""
+        return max(self.energy_kwh - self.reserve_kwh, 0.0)
 
 
 @dataclass(slots=True)
@@ -143,9 +152,9 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
     def battery_inputs(self) -> BatteryState:
         """Battery parameters and the energy it holds now, from the user's sensors.
 
-        Falls back to the configured capacity and an empty battery when a sensor
-        is not set or not available. Only the usable share of the battery is
-        planned with; the rest is a reserve at the bottom that is never touched.
+        Falls back to the configured capacity and a battery holding only its
+        reserve when a sensor is not set or not available. The reserve (the part
+        of the battery outside the usable share) is never discharged.
         """
         opts = self.config_entry.options
         total = self.battery.capacity_kwh
@@ -159,11 +168,10 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         share = min(max(settings.get(opts, CONF_BATTERY_USABLE) / 100, 0.01), 1.0)
         usable = total * share
         reserve = total - usable
-        params = replace(self.battery, capacity_kwh=usable)
+        params = replace(self.battery, capacity_kwh=total, min_kwh=reserve)
         stored = self._stored_energy(total)
         source = "assumed empty" if stored is None else "sensor"
-        available = min(max((stored or 0.0) - reserve, 0.0), usable)
-        return BatteryState(params, available, source, total, reserve)
+        return BatteryState(params, reserve if stored is None else stored, source, total, reserve)
 
     def _stored_energy(self, total_kwh: float) -> float | None:
         """Energy in the whole battery (kWh) from the charge sensor, if usable."""
@@ -234,13 +242,15 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
                 left = (first.end - max(now, first.start)) / (first.end - first.start)
                 slots[0] = replace(slots[0], fraction=left)
             hours = (points[0].end - points[0].start).total_seconds() / 3600
-            start_energy = battery.energy_kwh if offset == 0 else 0.0
+            # Tomorrow's level is unknown: assume nothing to sell (only the reserve is held).
+            start_energy = battery.energy_kwh if offset == 0 else battery.reserve_kwh
             plans[offset] = plan(slots, hours, battery.params, start_energy)
             covered[offset] = points
             info[offset] = {
-                "capacity_kwh": round(battery.params.capacity_kwh, 2),
+                "capacity_kwh": round(battery.usable_kwh, 2),
                 "reserve_kwh": round(battery.reserve_kwh, 2),
                 "starting_energy_kwh": round(start_energy, 2),
+                "available_kwh": round(max(start_energy - battery.reserve_kwh, 0.0), 2),
                 "starting_energy": battery.source if offset == 0 else "assumed empty",
             }
         return plans, info, covered

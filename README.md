@@ -61,7 +61,7 @@ The two timers look ahead 24 hours by default (*Configure → Timers*, 1 to 48 h
 
 ### Using only part of the battery
 
-*Share of the battery to use* (battery page, default 100%) keeps the rest as a reserve at the bottom that is never sold: backup power or your own use. At 50% of a 10 kWh battery the planner works with 5 kWh. With a state-of-charge sensor only the energy *above* the reserve counts, so a battery at or below the reserve has nothing to sell.
+*Share of the battery to use* (battery page, default 100%) keeps the rest as a reserve at the bottom that is never sold: backup power or your own use. At 50% of a 10 kWh battery the planner works with 5 kWh. The reserve is a floor: the planner never discharges below it. With a state-of-charge sensor the plan starts from the real level, so a battery at or below the reserve has nothing to sell, and energy bought to refill it is not counted as sellable.
 
 Not financial advice: results depend on your inputs and on the prices the source publishes.
 

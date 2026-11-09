@@ -148,9 +148,8 @@ def _curve(d: PlanData, offset: int) -> list[tuple[datetime, float]] | None:
     plan, pts, info = d.plans.get(offset), d.points.get(offset), d.info.get(offset)
     if plan is None or not pts or not info or len(plan.soc) != len(pts) + 1:
         return None
-    reserve = info["reserve_kwh"]
     times = [p.start for p in pts] + [pts[-1].end]
-    return [(t, reserve + kwh) for t, kwh in zip(times, plan.soc)]
+    return list(zip(times, plan.soc))
 
 
 def _soc_value(offset: int) -> Callable[[PlanData], float | None]:
