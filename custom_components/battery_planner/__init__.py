@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 
 from .coordinator import PlannerCoordinator
 
-PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR]
+PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SELECT]
 
 type PlannerConfigEntry = ConfigEntry[PlannerCoordinator]
 

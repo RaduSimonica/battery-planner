@@ -260,3 +260,41 @@ def test_soc_curve_follows_the_plan():
 def test_soc_curve_is_flat_when_nothing_pays():
     result = plan(_day([0.01, 0.01, 0.01, 0.01]), 1.0, BatteryParams(), initial_kwh=3.0)
     assert not result.profitable and result.soc == [3.0] * 5
+
+
+# -- reserve (minimum level) ------------------------------------------------
+
+
+def _reserve_params(**kw):
+    return BatteryParams(capacity_kwh=10, max_charge_kw=5, max_discharge_kw=5,
+                         round_trip_efficiency=1.0, degradation_per_kwh=0.0, **kw)
+
+
+def test_reserve_is_never_discharged():
+    result = plan(_day([0.1, 0.1, 0.1, 2.0, 2.0, 2.0]), 1.0, _reserve_params(min_kwh=5), initial_kwh=5.0)
+    assert result.profitable
+    assert min(result.soc) >= 5.0 - 1e-6
+    assert result.energy_sold_kwh == pytest.approx(result.energy_bought_kwh, abs=1e-6)  # only what it bought
+
+
+def test_a_battery_below_the_reserve_cannot_sell_but_can_charge():
+    prices = [0.1, 0.1, 0.1, 2.0, 2.0, 2.0]
+    result = plan(_day(prices), 1.0, _reserve_params(min_kwh=5), initial_kwh=2.0)
+    # It starts low, may buy cheap, and may only sell what is above the reserve.
+    assert result.soc[0] == 2.0
+    for before, after in zip(result.soc, result.soc[1:]):
+        if after < before:  # a discharge never ends below the reserve
+            assert after >= 5.0 - 1e-6
+    # The first 3 kWh bought only refill the reserve (2 -> 5), so they cannot be sold.
+    assert result.energy_sold_kwh <= result.energy_bought_kwh - 3.0 + 1e-6
+
+
+def test_a_battery_below_the_reserve_with_nothing_to_gain_stays_put():
+    result = plan(_day([1.0, 1.0, 1.0, 1.0]), 1.0, _reserve_params(min_kwh=5), initial_kwh=2.0)
+    assert not result.profitable and result.soc == [2.0] * 5
+
+
+def test_no_reserve_behaves_as_before():
+    a = plan(_day([0.1, 0.1, 2.0, 2.0]), 1.0, _reserve_params(min_kwh=0), initial_kwh=0.0)
+    b = plan(_day([0.1, 0.1, 2.0, 2.0]), 1.0, _reserve_params(), initial_kwh=0.0)
+    assert a.net_gain == b.net_gain and a.soc == b.soc

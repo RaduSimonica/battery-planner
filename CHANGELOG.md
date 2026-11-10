@@ -1,10 +1,34 @@
 # Changelog
 
-Every pull request into `main` bumps the version in
-`custom_components/battery_planner/manifest.json` and adds a section here. Merging
-publishes a GitHub release with this section as its notes, which is what HACS
-shows as the version. Versions follow [semantic versioning](https://semver.org):
-`0.x.0` for new features, `0.x.y` for fixes.
+Pull requests into `staging` add a snapshot section (`## [X.Y.Z-snapshot.N]`) and
+publish a pre-release; the pull request into `main` replaces them with one
+`## [X.Y.Z]` section and publishes the stable release that HACS shows as the
+version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
+[semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
+for fixes.
+
+## [0.3.0] - 2026-11-10
+
+Planning modes, solar and the house in the plan. Beta: please report what you find in the issues and attach the diagnostics file.
+
+### Added
+- **House consumption** page in *Configure*. The house's power comes from a sensor that measures it, or is worked out from the grid: one signed sensor (with a *flip* option) or two sensors for import and export, optionally with solar production (several sensors are added up), battery power (positive = charging) and an **EV charger** that is left out of the house's consumption.
+- **Learned consumption.** The average per hour of the day over the last four weeks, separately for weekdays and weekends, is built from Home Assistant's long-term statistics of those sensors, so it starts with the history that exists. New sensors *House power* and *Expected consumption next 24 hours* (with the hourly `forecast`). The integration now depends on the recorder.
+- **Planning mode** select, remembered across restarts and usable from automations: *Max profit* (as before, the default), *Cheap self-consumption* (the battery covers the house and never exports, worth the buy price it avoids) and *Balanced* (covers the house first, then exports what is left). Without a consumption forecast the plan falls back to max profit and says so in the `mode_note` attribute. Energy left in the battery at the end of the plan is valued at what it would cost to buy again, so the plan does not empty the battery just because the day ends.
+- **Solar.** The forecast comes from your Energy dashboard: every solar forecast listed there (Forecast.Solar, Solcast, Open-Meteo and others) is used and added up. In the house modes production first covers the house; the surplus can charge the battery for free instead of being exported cheaply, and is sold later when the price is high. Nothing is exported at a negative sell price (the surplus is stored or curtailed), and surplus beyond the grid export limit is curtailed: the battery's *Maximum discharge power* also stands for the export limit, so enter the lower of the battery's limit and the limit you are allowed. *Expected solar today / tomorrow* sensors.
+- **Earnings today / tomorrow**, **Expenses today / tomorrow** and **Net result today / tomorrow** sensors next to the net gain. The net gain is earnings minus expenses minus battery wear; the net result adds the change in the value of the energy left in the battery, which makes the house modes comparable with each other.
+- **Plan** sensor: the plan interval by interval for charts and cards, from now to the end of tomorrow: prices, the action, energy bought, delivered, to the house and exported, the expected house use and solar, the battery level, and the running earnings, expenses and net result. Three ready-made apexcharts cards in `examples/dashboards/` (apexcharts-card 2.0 or later).
+- **The plan follows what is happening.** The live house power and solar production shape the next hour or two and fade back to the usual pattern, so an oven that is on now counts. The plan is also redone ahead of the 15-minute step when the house load or solar production is 0.75 kW off what was assumed, or the battery level is 1 kWh off the plan (at most every five minutes).
+- **Free energy** binary sensor for automations that run heavy loads: on while energy costs nothing or would be wasted (a buy price of zero or less, or solar surplus the battery cannot absorb that would be exported for nothing or curtailed). The battery is assumed to charge greedily until full, as an inverter in its normal mode does.
+- **Download diagnostics** for bug reports, and issue templates on GitHub.
+
+### Changed
+- **Tomorrow's plan starts where today's plan leaves the battery** (it used to start at the reserve), so the level continues across midnight.
+- *Net gain per kWh* is per kWh the battery delivers (to the grid or the house). In max profit mode that is the same as before.
+- Charge windows include the energy that comes from the sun (`from_solar_kwh`).
+
+### Fixed
+- **A battery below its reserve is handled properly.** With a share below 100% and the charge under the reserve (say 25% with 50% reserved), the plan could count energy that only refills the reserve as sellable. The reserve is now a floor: the plan starts from the real level, may charge at any level, and only sells what is above the floor. The projected state of charge starts at the real level, and `starting_energy_kwh` is the whole battery's energy (a new `available_kwh` attribute is what can be sold). With no charge sensor the battery is assumed to hold only its reserve.
 
 ## [0.2.0] - 2026-11-09
 

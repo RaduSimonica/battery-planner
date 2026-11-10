@@ -8,6 +8,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -23,16 +24,27 @@ from .const import (
     CONF_BATTERY_DEGRADATION,
     CONF_BATTERY_DISCHARGE_POWER,
     CONF_BATTERY_EFFICIENCY,
+    CONF_BATTERY_POWER_ENTITY,
+    CONF_BATTERY_POWER_FLIP,
     CONF_BATTERY_SOC_ENTITY,
     CONF_BATTERY_USABLE,
+    CONF_EV_POWER_ENTITY,
+    CONF_GRID_EXPORT_ENTITY,
+    CONF_GRID_IMPORT_ENTITY,
+    CONF_GRID_POWER_ENTITY,
+    CONF_GRID_POWER_FLIP,
+    CONF_HOUSE_POWER_ENTITY,
     CONF_PRICE_ENTITY,
+    CONF_SOLAR_POWER_ENTITY,
     CONF_TIMER_HORIZON,
+    CONSUMPTION_ENTITIES,
     DOMAIN,
 )
 from .prices import currency_of, parse_prices
 
 _PRICE_SOURCE = EntitySelector(EntitySelectorConfig(domain="sensor"))
 _SENSOR = EntitySelector(EntitySelectorConfig(domain=["sensor", "number", "input_number"]))
+_SENSORS = EntitySelector(EntitySelectorConfig(domain=["sensor", "number", "input_number"], multiple=True))
 OPTIONAL_ENTITIES = (CONF_BATTERY_SOC_ENTITY, CONF_BATTERY_CAPACITY_ENTITY)
 
 
@@ -60,10 +72,46 @@ def _suggested(schema: dict, values: dict[str, Any]) -> dict[str, Any]:
     return {k.schema: values.get(k.schema, settings.BATTERY_DEFAULTS.get(k.schema)) for k in schema}
 
 
-def _clear_emptied(values: dict[str, Any], submitted: dict[str, Any]) -> dict[str, Any]:
+def consumption_schema() -> dict:
+    return {
+        vol.Optional(CONF_HOUSE_POWER_ENTITY): _SENSOR,
+        vol.Optional(CONF_GRID_POWER_ENTITY): _SENSOR,
+        vol.Optional(CONF_GRID_POWER_FLIP, default=False): BooleanSelector(),
+        vol.Optional(CONF_GRID_IMPORT_ENTITY): _SENSOR,
+        vol.Optional(CONF_GRID_EXPORT_ENTITY): _SENSOR,
+        vol.Optional(CONF_SOLAR_POWER_ENTITY): _SENSORS,
+        vol.Optional(CONF_BATTERY_POWER_ENTITY): _SENSOR,
+        vol.Optional(CONF_BATTERY_POWER_FLIP, default=False): BooleanSelector(),
+        vol.Optional(CONF_EV_POWER_ENTITY): _SENSOR,
+    }
+
+
+def _solar_as_list(options: dict[str, Any]) -> dict[str, Any]:
+    """Older settings kept one production sensor as text; the page now takes a list."""
+    value = options.get(CONF_SOLAR_POWER_ENTITY)
+    return options | {CONF_SOLAR_POWER_ENTITY: [value]} if isinstance(value, str) else options
+
+
+def consumption_errors(values: dict[str, Any]) -> dict[str, str]:
+    """What cannot work: a mix of grid sensors, or half a pair. Nothing at all is fine."""
+    grid, imp, exp = (values.get(k) for k in (CONF_GRID_POWER_ENTITY, CONF_GRID_IMPORT_ENTITY, CONF_GRID_EXPORT_ENTITY))
+    if grid and (imp or exp):
+        return {"base": "grid_both"}
+    if bool(imp) != bool(exp):
+        return {"base": "grid_pair"}
+    if not values.get(CONF_HOUSE_POWER_ENTITY) and not grid and not imp and any(
+        values.get(k) for k in (CONF_SOLAR_POWER_ENTITY, CONF_BATTERY_POWER_ENTITY, CONF_EV_POWER_ENTITY)
+    ):
+        return {"base": "grid_missing"}
+    return {}
+
+
+def _clear_emptied(
+    values: dict[str, Any], submitted: dict[str, Any], keys: tuple[str, ...] = OPTIONAL_ENTITIES
+) -> dict[str, Any]:
     """The frontend leaves an emptied optional field out: that means 'cleared'."""
     values = values | submitted
-    for key in OPTIONAL_ENTITIES:
+    for key in keys:
         if key not in submitted:
             values.pop(key, None)
     return values
@@ -130,7 +178,7 @@ class BatteryPlannerOptionsFlow(OptionsFlow):
             self._options = dict(self.config_entry.options)
             self._data = dict(self.config_entry.data)
             self._loaded = True
-        return self.async_show_menu(step_id="init", menu_options=["source", "battery", "general", "finish"])
+        return self.async_show_menu(step_id="init", menu_options=["source", "battery", "consumption", "general", "finish"])
 
     async def async_step_finish(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if self._data != dict(self.config_entry.data):
@@ -150,6 +198,22 @@ class BatteryPlannerOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="source",
             data_schema=self.add_suggested_values_to_schema(schema, self._data),
+            errors=errors,
+        )
+
+    async def async_step_consumption(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        schema = consumption_schema()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            errors = consumption_errors(user_input)
+            if not errors:
+                self._options = _clear_emptied(self._options, user_input, CONSUMPTION_ENTITIES)
+                return await self.async_step_init()
+        return self.async_show_form(
+            step_id="consumption",
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema(schema), user_input or _suggested(schema, _solar_as_list(self._options))
+            ),
             errors=errors,
         )
 

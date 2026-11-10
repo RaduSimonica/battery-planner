@@ -1,28 +1,30 @@
-# When the battery planner wants to charge and discharge, over your buy and
-# sell prices. Bars show the average price paid (charge) or received
-# (discharge) in each planned interval. Covers the rest of today and tomorrow
-# once published. Needs apexcharts-card (HACS -> Frontend).
-# If the plan is empty, the planner found no profitable cycle for your
-# settings (see the "Battery arbitrage profitable" sensors).
-# ENTITY IDS: the price series is the OPCOM PZU "Upcoming prices" sensor; use
-# your own price source's entity if you have another. Home Assistant prefixes
-# the area of the device to entities created while it sits in an area (e.g.
-# sensor.server_battery_planner_net_gain_today). If a series says "Entity not
+# What the battery is planned to do, interval by interval, over your buy and
+# sell prices. Bars show the price paid (charge) or the value per kWh
+# (discharge: the buy price avoided when it covers the house, the sell price
+# when it is exported) in each planned interval. Covers the rest of today and
+# tomorrow once published, and follows the plan as it is redone. Needs
+# apexcharts-card (HACS -> Frontend).
+# If the plan is empty, the planner found nothing worth doing for your
+# settings (see the "Arbitrage profitable" sensors).
+# ENTITY IDS: the plan is the Battery Planner "Plan" sensor. Home Assistant
+# prefixes the area of the device to entities created while it sits in an area
+# (e.g. sensor.server_battery_planner_plan). If a series says "Entity not
 # available", look up the real id under Settings -> Devices & services and
 # replace it in the card.
 type: custom:apexcharts-card
 header:
   show: true
   title: Battery plan
-graph_span: 24h
+graph_span: 48h
 span:
-  start: minute
+  start: day
 now:
   show: true
   label: Now
   color: "#e74c3c"
 series:
-  - entity: sensor.opcom_pzu_upcoming_prices
+  - entity: sensor.battery_planner_plan
+    extend_to: false
     name: Buy price
     type: line
     curve: stepline
@@ -32,24 +34,45 @@ series:
     show:
       in_header: false
     data_generator: |
-      return (entity.attributes.prices || []).map(p => [new Date(p.start).getTime(), p.buy]);
-  - entity: sensor.battery_planner_net_gain_today
-    name: Charge
+      return (entity.attributes.plan || []).map(r => [new Date(r.start).getTime(), r.buy]);
+  - entity: sensor.battery_planner_plan
+    extend_to: false
+    name: Sell price
+    type: line
+    curve: stepline
+    color: "#ffa502"
+    stroke_width: 2
+    float_precision: 4
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || []).map(r => [new Date(r.start).getTime(), r.sell]);
+  - entity: sensor.battery_planner_plan
+    extend_to: false
+    name: Charge from the grid
     type: column
     color: "#2ed573"
     float_precision: 4
     show:
       in_header: false
     data_generator: |
-      const rows = [];
-      for (const id of ['sensor.battery_planner_net_gain_today', 'sensor.battery_planner_net_gain_tomorrow']) {
-        for (const b of (hass.states[id]?.attributes?.schedule || [])) {
-          if (b.action !== 'charge') continue;
-          for (let t = new Date(b.from).getTime(); t < new Date(b.to).getTime(); t += 900000) rows.push([t, b.avg_price]);
-        }
-      }
-      return rows.sort((a, b) => a[0] - b[0]);
-  - entity: sensor.battery_planner_net_gain_today
+      return (entity.attributes.plan || [])
+        .filter(r => r.charge_kwh > 0.02)  // ignore rounding dust
+        .map(r => [new Date(r.start).getTime(), r.buy]);
+  - entity: sensor.battery_planner_plan
+    extend_to: false
+    name: Charge from the sun
+    type: column
+    color: "#f1c40f"
+    float_precision: 4
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || [])
+        .filter(r => r.charge_kwh <= 0.02 && r.solar_to_battery_kwh > 0.01)
+        .map(r => [new Date(r.start).getTime(), r.sell]);
+  - entity: sensor.battery_planner_plan
+    extend_to: false
     name: Discharge
     type: column
     color: "#9b59b6"
@@ -57,11 +80,6 @@ series:
     show:
       in_header: false
     data_generator: |
-      const rows = [];
-      for (const id of ['sensor.battery_planner_net_gain_today', 'sensor.battery_planner_net_gain_tomorrow']) {
-        for (const b of (hass.states[id]?.attributes?.schedule || [])) {
-          if (b.action !== 'discharge') continue;
-          for (let t = new Date(b.from).getTime(); t < new Date(b.to).getTime(); t += 900000) rows.push([t, b.avg_price]);
-        }
-      }
-      return rows.sort((a, b) => a[0] - b[0]);
+      return (entity.attributes.plan || [])
+        .filter(r => r.action === 'discharge')
+        .map(r => [new Date(r.start).getTime(), (r.to_house_kwh * r.buy + r.export_kwh * r.sell) / r.discharge_kwh]);

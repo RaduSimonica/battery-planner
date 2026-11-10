@@ -51,7 +51,8 @@
           "source": "Price source",
           "battery": "Battery",
           "finish": "Save and close",
-          "general": "Timers"
+          "general": "Timers",
+          "consumption": "House consumption"
         }
       },
       "source": {
@@ -79,7 +80,7 @@
         },
         "data_description": {
           "battery_charge_power_kw": "Most power the battery can draw from the grid, in kW at the grid side. 300 W = 0.3 kW.",
-          "battery_discharge_power_kw": "Most power it can deliver to the grid, in kW. 1200 W = 1.2 kW. Charging and discharging limits are often different.",
+          "battery_discharge_power_kw": "Most power it can deliver to the grid, in kW. 1200 W = 1.2 kW. Charging and discharging limits are often different. It also stands for your **grid export limit** for the plan: enter the lower of the battery's limit and the export limit you are allowed.",
           "battery_round_trip_efficiency_pct": "Share of grid energy that comes back out: buy → store → sell. 85-95% is typical for lithium batteries.",
           "battery_degradation_per_kwh": "Battery wear per kWh delivered, in {currency}. Roughly battery price per kWh ÷ lifetime cycles (e.g. 1500 ÷ 6000 = 0.25).",
           "battery_soc_entity": "Percent, Wh or kWh. Used for today's plan.",
@@ -96,10 +97,37 @@
         "data_description": {
           "timer_horizon_hours": "Hours from now, 1 to 48. If tomorrow's prices are not published yet, only what is known is searched."
         }
+      },
+      "consumption": {
+        "title": "House consumption",
+        "description": "So the planner can learn how much your house uses and when. Everything is optional.\n\n**Pick one way to measure the house:**\n- a sensor that measures the house directly, **or**\n- **one grid power sensor** that is positive when importing and negative when exporting (tick *flip* if yours is the other way round), **or**\n- **two grid sensors**, one for import and one for export, both positive.\n\nWith a grid sensor you can add your **solar production** and **battery power** (positive = charging), so energy that goes into the battery or comes from the sun is not counted as house use. Sensors must be in W or kW. The pattern is learned from Home Assistant's long-term statistics of these sensors, which need `state_class: measurement` (most power sensors have it), per hour, separately for weekdays and weekends. An **EV charger** can be taken out, as it is a large and unpredictable load.\n\n**Solar forecast:** if your Energy dashboard has solar forecasts (Forecast.Solar, Solcast, Open-Meteo and others), they are used automatically, all of them added up. In the *Balanced* and *Cheap self-consumption* modes the plan then stores the sun instead of exporting it when the price is low.",
+        "data": {
+          "house_power_entity": "House power sensor",
+          "grid_power_entity": "Grid power sensor",
+          "grid_power_flip": "Grid sensor reports export as positive",
+          "grid_import_entity": "Grid import sensor",
+          "grid_export_entity": "Grid export sensor",
+          "solar_power_entity": "Solar production sensors",
+          "battery_power_entity": "Battery power sensor",
+          "battery_power_flip": "Battery sensor reports discharging as positive",
+          "ev_power_entity": "EV charger power sensor (optional)"
+        },
+        "data_description": {
+          "house_power_entity": "Use this if one sensor already tells the house's power. The others are then ignored.",
+          "grid_power_entity": "Positive when importing from the grid, negative when exporting.",
+          "grid_import_entity": "Power drawn from the grid, always positive.",
+          "grid_export_entity": "Power sent to the grid, always positive.",
+          "solar_power_entity": "One or several sensors in W or kW; they are added up. Used to work out the house's consumption and to follow what the panels make now.",
+          "battery_power_entity": "Positive while charging, negative while discharging.",
+          "ev_power_entity": "Left out of the house's consumption: an EV is a big, unpredictable load that is rarely charged from the home battery."
+        }
       }
     },
     "error": {
-      "no_prices": "That sensor has no usable `prices` attribute. Pick a sensor that follows the price series format."
+      "no_prices": "That sensor has no usable `prices` attribute. Pick a sensor that follows the price series format.",
+      "grid_both": "Use either one grid power sensor or the import and export pair, not both.",
+      "grid_pair": "The import and export sensors go together: pick both or neither.",
+      "grid_missing": "Solar and battery power only help together with a grid sensor (or the import and export pair)."
     }
   },
   "entity": {
@@ -147,6 +175,39 @@
       },
       "time_to_best_sell_price": {
         "name": "Time to best sell price"
+      },
+      "house_power": {
+        "name": "House power"
+      },
+      "expected_consumption": {
+        "name": "Expected consumption next 24 hours"
+      },
+      "earnings_today": {
+        "name": "Earnings today"
+      },
+      "earnings_tomorrow": {
+        "name": "Earnings tomorrow"
+      },
+      "expenses_today": {
+        "name": "Expenses today"
+      },
+      "expenses_tomorrow": {
+        "name": "Expenses tomorrow"
+      },
+      "net_result_today": {
+        "name": "Net result today"
+      },
+      "net_result_tomorrow": {
+        "name": "Net result tomorrow"
+      },
+      "plan": {
+        "name": "Plan"
+      },
+      "expected_solar_today": {
+        "name": "Expected solar today"
+      },
+      "expected_solar_tomorrow": {
+        "name": "Expected solar tomorrow"
       }
     },
     "binary_sensor": {
@@ -155,6 +216,19 @@
       },
       "profitable_tomorrow": {
         "name": "Arbitrage profitable tomorrow"
+      },
+      "free_energy": {
+        "name": "Free energy"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Planning mode",
+        "state": {
+          "max_profit": "Max profit",
+          "self_consumption": "Cheap self-consumption",
+          "balanced": "Balanced"
+        }
       }
     }
   }

@@ -1,13 +1,14 @@
 name: Version
 
-# Every pull request into main must carry a new version, and merging it
-# publishes that version as a GitHub release (which HACS shows and installs).
+# Pull requests into staging carry a snapshot version (X.Y.Z-snapshot.N) and
+# publish a GitHub pre-release when merged. Pull requests into main carry a
+# stable version (X.Y.Z) and publish the release that HACS installs by default.
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, staging]
   push:
-    branches: [main]
+    branches: [main, staging]
 
 jobs:
   check:
