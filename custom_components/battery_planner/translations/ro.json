@@ -51,7 +51,8 @@
           "source": "Sursa prețurilor",
           "battery": "Baterie",
           "finish": "Salvează și închide",
-          "general": "Cronometre"
+          "general": "Cronometre",
+          "consumption": "Consum casă"
         }
       },
       "source": {
@@ -96,10 +97,37 @@
         "data_description": {
           "timer_horizon_hours": "Ore de acum încolo, 1 până la 48. Dacă prețurile de mâine nu sunt publicate, se caută doar în ce se știe."
         }
+      },
+      "consumption": {
+        "title": "Consum casă",
+        "description": "Ca planificatorul să învețe cât consumă casa ta și când. Totul este opțional.\n\n**Alege o singură metodă de măsurare:**\n- un senzor care măsoară direct casa, **sau**\n- **un senzor de putere de la rețea**, pozitiv la import și negativ la export (bifează *inversează* dacă al tău e invers), **sau**\n- **doi senzori de rețea**, unul pentru import și unul pentru export, ambii pozitivi.\n\nLa un senzor de rețea poți adăuga **producția solară** și **puterea bateriei** (pozitiv = se încarcă), ca energia care intră în baterie sau vine de la soare să nu fie socotită consum al casei. Senzorii trebuie să fie în W sau kW. Tiparul se învață din statisticile pe termen lung ale acestor senzori din Home Assistant, care au nevoie de `state_class: measurement` (majoritatea senzorilor de putere îl au), pe ore, separat pentru zilele lucrătoare și weekend. Un **încărcător de mașină electrică** poate fi scos, fiind o sarcină mare și imprevizibilă.",
+        "data": {
+          "house_power_entity": "Senzor putere casă",
+          "grid_power_entity": "Senzor putere rețea",
+          "grid_power_flip": "Senzorul raportează exportul ca pozitiv",
+          "grid_import_entity": "Senzor import din rețea",
+          "grid_export_entity": "Senzor export în rețea",
+          "solar_power_entity": "Senzor producție solară",
+          "battery_power_entity": "Senzor putere baterie",
+          "battery_power_flip": "Senzorul raportează descărcarea ca pozitivă",
+          "ev_power_entity": "Senzor putere încărcător auto (opțional)"
+        },
+        "data_description": {
+          "house_power_entity": "Folosește-l dacă un senzor spune deja puterea casei. Ceilalți sunt atunci ignorați.",
+          "grid_power_entity": "Pozitiv la import din rețea, negativ la export.",
+          "grid_import_entity": "Puterea luată din rețea, mereu pozitivă.",
+          "grid_export_entity": "Puterea trimisă în rețea, mereu pozitivă.",
+          "solar_power_entity": "Puterea produsă de panouri, în W sau kW.",
+          "battery_power_entity": "Pozitiv la încărcare, negativ la descărcare.",
+          "ev_power_entity": "Scos din consumul casei: o mașină electrică e o sarcină mare și imprevizibilă, rar încărcată din bateria casei."
+        }
       }
     },
     "error": {
-      "no_prices": "Senzorul nu are un atribut `prices` utilizabil. Alege un senzor care respectă formatul seriei de prețuri."
+      "no_prices": "Senzorul nu are un atribut `prices` utilizabil. Alege un senzor care respectă formatul seriei de prețuri.",
+      "grid_both": "Folosește fie un senzor de putere de la rețea, fie perechea import și export, nu pe amândouă.",
+      "grid_pair": "Senzorii de import și export merg împreună: alege-i pe amândoi sau pe niciunul.",
+      "grid_missing": "Puterea solară și a bateriei ajută doar împreună cu un senzor de rețea (sau perechea import și export)."
     }
   },
   "entity": {
@@ -147,6 +175,12 @@
       },
       "time_to_best_sell_price": {
         "name": "Timp până la cel mai bun preț de vânzare"
+      },
+      "house_power": {
+        "name": "Putere casă"
+      },
+      "expected_consumption": {
+        "name": "Consum estimat în următoarele 24 de ore"
       }
     },
     "binary_sensor": {

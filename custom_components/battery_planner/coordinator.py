@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -23,6 +24,7 @@ from .const import (
     CONF_PRICE_ENTITY,
     DOMAIN,
 )
+from .consumption import KEEP_DAYS, POWER_UNITS, LoadProfile, hourly_kwh, house_power_kw
 from .prices import PricePoint, PriceSeries, currency_of, local_day_bounds, parse_prices
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,8 +81,31 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         self._series = PriceSeries()
         self._unit: str | None = None
         self._warned_units: set[str] = set()
+        # House consumption: only when the user picked sensors for it.
+        self.load_sources = settings.load_sources(entry.options)
+        self.load = LoadProfile()  # learned from the recorder's hourly statistics
+        self.load_kw: float | None = None  # the house's power now
+        self._load_listeners: list[Callable[[], None]] = []
+
+    @property
+    def tracks_load(self) -> bool:
+        return self.load_sources.configured
 
     async def async_start(self) -> None:
+        if self.tracks_load:
+            self._sample()
+            self.config_entry.async_on_unload(
+                async_track_state_change_event(
+                    self.hass, self.load_sources.entities, self._load_sensor_changed
+                )
+            )
+            # The statistics change once an hour; read them now and just after each hour.
+            self.config_entry.async_on_unload(
+                async_track_utc_time_change(self.hass, self._hourly, minute=5, second=30)
+            )
+            self.config_entry.async_create_background_task(
+                self.hass, self._learn(), f"{DOMAIN} learn consumption"
+            )
         self.config_entry.async_on_unload(
             async_track_state_change_event(self.hass, [self.price_entity], self._source_changed)
         )
@@ -119,6 +144,93 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
     @callback
     def _tick(self, _now: datetime) -> None:
         self.hass.async_create_task(self.async_refresh())
+
+    # -- house consumption ---------------------------------------------------------
+
+    def add_load_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
+        """Call ``listener`` whenever the house's power is read again."""
+        self._load_listeners.append(listener)
+        return lambda: self._load_listeners.remove(listener)
+
+    def _power_kw(self, entity_id: str) -> float | None:
+        reading = self._read_number(entity_id)
+        if reading is None:
+            return None
+        value, unit = reading
+        factor = POWER_UNITS.get(unit or "")
+        if factor is None:
+            self._warn_unit(entity_id, unit, "W or kW")
+            return None
+        return value * factor
+
+    @callback
+    def _sample(self) -> None:
+        """Work out the house's power from the sensors, for the live sensor."""
+        self.load_kw = house_power_kw(self.load_sources, self._power_kw)
+        for listener in list(self._load_listeners):
+            listener()
+
+    @callback
+    def _load_sensor_changed(self, _event: Event[EventStateChangedData]) -> None:
+        self._sample()
+
+    @callback
+    def _hourly(self, _now: datetime) -> None:
+        self.config_entry.async_create_background_task(
+            self.hass, self._learn(), f"{DOMAIN} learn consumption"
+        )
+
+    async def _learn(self) -> None:
+        """Rebuild the consumption pattern from the recorder's hourly statistics."""
+        try:
+            means = await self._statistics()
+        except Exception:  # noqa: BLE001 - a recorder hiccup must not stop the planner
+            _LOGGER.debug("Could not read the consumption statistics", exc_info=True)
+            return
+        self.load = LoadProfile(hourly_kwh(self.load_sources, means))
+        self.async_update_listeners()
+
+    async def _statistics(self) -> dict[str, dict[int, float]]:
+        """Hourly mean power (kW) of every consumption sensor, from long-term statistics."""
+        from homeassistant.components.recorder import get_instance
+        from homeassistant.components.recorder.statistics import get_metadata, statistics_during_period
+
+        entities = self.load_sources.entities
+        end = dt_util.utcnow()
+        start = end - timedelta(days=KEEP_DAYS)
+        recorder = get_instance(self.hass)
+        metadata = await recorder.async_add_executor_job(
+            lambda: get_metadata(self.hass, statistic_ids=set(entities))
+        )
+        rows = await recorder.async_add_executor_job(
+            lambda: statistics_during_period(
+                self.hass, start, end, set(entities), "hour", None, {"mean"}
+            )
+        )
+        means: dict[str, dict[int, float]] = {}
+        for entity in entities:
+            meta = metadata.get(entity)
+            factor = POWER_UNITS.get(meta[1]["unit_of_measurement"] or "") if meta else None
+            if factor is None:
+                self._warn_statistics(entity, meta[1]["unit_of_measurement"] if meta else None)
+                continue
+            means[entity] = {
+                int(r["start"]): r["mean"] * factor
+                for r in rows.get(entity, [])
+                if r.get("mean") is not None
+            }
+        return means
+
+    def _warn_statistics(self, entity_id: str, unit: str | None) -> None:
+        if entity_id not in self._warned_units:
+            self._warned_units.add(entity_id)
+            if unit is None:
+                _LOGGER.warning(
+                    "%s has no long-term statistics, so its history cannot be learned from "
+                    "(it needs state_class: measurement and a unit of W or kW)", entity_id,
+                )
+            else:
+                _LOGGER.warning("%s has statistics in %s, which cannot be used (use W or kW)", entity_id, unit)
 
     # -- inputs ----------------------------------------------------------------
 

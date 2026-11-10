@@ -7,6 +7,16 @@ version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
 [semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
 for fixes.
 
+## [0.3.0-snapshot.1] - 2026-11-09
+
+First slice of the planning modes: the planner learns how much the house uses. It does not change the plan yet.
+
+### Added
+- **House consumption** page in *Configure*. The house's power is read from a sensor that measures it, or worked out from the grid: one signed sensor (with a *flip* option for meters that report export as positive) or two sensors for import and export, optionally with solar production and battery power (positive = charging). Sensors in W or kW.
+- **EV charger** (optional): its power is taken out of the house's consumption. It is a large, unpredictable load that is rarely charged from the home battery.
+- **Learned pattern from the recorder.** The average per hour of the day over the last four weeks, separately for weekdays and weekends, is built from Home Assistant's long-term statistics of those sensors, so it starts with the history that already exists. The sensors need `state_class: measurement` (most power sensors have it). The integration now depends on the recorder.
+- New sensors, only when consumption sensors are set: *House power* (live) and *Expected consumption next 24 hours* (attributes: the hourly `forecast`, `days_learned`, `hours_known`).
+
 ## [0.2.1-snapshot.1] - 2026-11-09
 
 ### Fixed

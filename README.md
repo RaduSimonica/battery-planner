@@ -56,10 +56,17 @@ It is only worth cycling when that is positive. The planner finds the best sched
 | Energy to charge today / tomorrow | kWh the plan draws from the grid; the `windows` attribute lists when, with each window's kWh and average price |
 | Energy to export today / tomorrow | kWh the plan delivers to the grid, with its `windows` |
 | Projected state of charge today / tomorrow | Battery level (%) at the end of the day if the plan is followed. Attributes: `end_kwh`, `peak_kwh`, `peak_at` and a `curve` (time, kWh, %) for charts. Today starts from your real level, tomorrow from empty |
+| House power, Expected consumption next 24 hours | Only with the consumption sensors above. The expected value comes with an hourly `forecast` |
 | Time to cheapest price | Minutes until the cheapest *buy* price starts (`0` = now); `at`, `ends_at` and `price` in the attributes |
 | Time to best sell price | Minutes until the highest *sell* price starts |
 
 The two timers look ahead 24 hours by default (*Configure → Timers*, 1 to 48 hours). They tick every minute.
+
+### House consumption (optional)
+
+*Configure → House consumption.* Pick how the house's power is measured: a sensor of the house itself, **one grid sensor** (positive = import; tick *flip* if yours reports export as positive), or **two grid sensors** (import and export). With a grid sensor you can add solar production and battery power (positive = charging), so energy that fills the battery or comes from the sun is not counted as house use. An **EV charger** sensor can be added too: it is left out of the house's consumption, because it is a large, unpredictable load that is rarely charged from the home battery.
+
+The planner learns your consumption from Home Assistant's long-term statistics of these sensors (hourly, so they need `state_class: measurement` and a unit of W or kW; most power sensors qualify). It uses the last four weeks, separately for weekdays and weekends, and starts with the history you already have. *Expected consumption next 24 hours* shows the result with the hourly forecast in an attribute. The plan does not use it yet: it is the groundwork for the planning modes in the [roadmap](ROADMAP.md).
 
 ### Using only part of the battery
 
