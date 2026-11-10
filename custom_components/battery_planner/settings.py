@@ -46,8 +46,15 @@ def load_sources(options: Mapping[str, Any]) -> LoadSources:
         grid_flip=bool(options.get(CONF_GRID_POWER_FLIP)),
         grid_import=options.get(CONF_GRID_IMPORT_ENTITY) or None,
         grid_export=options.get(CONF_GRID_EXPORT_ENTITY) or None,
-        solar=options.get(CONF_SOLAR_POWER_ENTITY) or None,
+        solar=_entities(options.get(CONF_SOLAR_POWER_ENTITY)),
         battery=options.get(CONF_BATTERY_POWER_ENTITY) or None,
         battery_flip=bool(options.get(CONF_BATTERY_POWER_FLIP)),
         ev=options.get(CONF_EV_POWER_ENTITY) or None,
     )
+
+
+def _entities(value: Any) -> tuple[str, ...] | None:
+    """One entity (older settings) or a list of them, as a tuple."""
+    if not value:
+        return None
+    return (value,) if isinstance(value, str) else tuple(e for e in value if e)

@@ -142,7 +142,7 @@ async def open_page(hass, entry, freezer):
     [
         ({"grid_power_entity": "sensor.g", "grid_import_entity": "sensor.i", "grid_export_entity": "sensor.e"}, "grid_both"),
         ({"grid_import_entity": "sensor.i"}, "grid_pair"),
-        ({"solar_power_entity": "sensor.pv"}, "grid_missing"),
+        ({"solar_power_entity": ["sensor.pv"]}, "grid_missing"),
     ],
 )
 async def test_the_page_refuses_what_cannot_work(hass, entry, freezer, values, error):

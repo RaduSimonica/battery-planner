@@ -1,0 +1,52 @@
+# What the plan is expected to earn and spend, building up over the plan
+# (today's rest, then tomorrow). Running totals from now: money received
+# (exports, plus purchases avoided when the battery powers the house), money
+# spent buying energy, and the cash result after battery wear. Needs
+# apexcharts-card (HACS -> Frontend). Entity ids: see battery-plan.yaml.
+type: custom:apexcharts-card
+header:
+  show: true
+  title: Planned earnings and expenses
+  show_states: true
+  colorize_states: true
+graph_span: 48h
+span:
+  start: minute
+now:
+  show: true
+  label: Now
+  color: "#e74c3c"
+series:
+  - entity: sensor.battery_planner_plan
+    name: Earnings
+    type: line
+    curve: stepline
+    color: "#2ed573"
+    stroke_width: 2
+    float_precision: 2
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || []).map(r => [new Date(r.end).getTime(), r.earnings]);
+  - entity: sensor.battery_planner_plan
+    name: Expenses
+    type: line
+    curve: stepline
+    color: "#ff4757"
+    stroke_width: 2
+    float_precision: 2
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || []).map(r => [new Date(r.end).getTime(), r.expenses]);
+  - entity: sensor.battery_planner_plan
+    name: Net (cash)
+    type: area
+    curve: stepline
+    color: "#3498db"
+    stroke_width: 2
+    float_precision: 2
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || []).map(r => [new Date(r.end).getTime(), r.net]);

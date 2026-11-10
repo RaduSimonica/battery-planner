@@ -146,6 +146,10 @@ projected state-of-charge curve including solar and load.
 
 **Progress.** Slice 1 (house power from the grid, solar, battery and EV sensors, and the consumption forecast learned from the recorder's hourly statistics) is in snapshot 0.3.0-snapshot.1. Slice 2 (the cost model with the house, the mode select, earnings and expenses) is in snapshot 0.3.0-snapshot.2. Next: solar (slice 3).
 
+The *Plan* sensor now carries everything per interval (see the README), so the cards of item 1 need no new backend work.
+
+**Progress.** Slice 3 is in snapshot 0.3.0-snapshot.3: the forecast comes from the Energy dashboard (all providers, added up), several production sensors are summed, negative prices and the export limit are handled. Still to do: tuning against real days, the sensor-attribute fallback for forecast providers that are not in the Energy dashboard, and a per-array view.
+
 Build this together with the modes (item 2) and before the custom cards (item 1), so the cards can show the house reserve too.
 
 ## Price sources besides an entity

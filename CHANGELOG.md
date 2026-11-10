@@ -7,6 +7,23 @@ version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
 [semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
 for fixes.
 
+## [0.3.0-snapshot.3] - 2026-11-10
+
+### Added
+- **Solar.** The plan knows what the panels make. The forecast comes from your Energy dashboard: every solar forecast listed there (Forecast.Solar, Solcast, Open-Meteo and others) is used and added up, so several arrays with a forecast each are covered. Production first covers the house; the surplus can charge the battery for free, or be exported. The plan stores sun that would otherwise be exported cheaply and sells it later when the price is high; if the battery is full the surplus is exported anyway. It does not export at a negative sell price (the surplus is stored or curtailed). A negative buy price would be charged from the grid, though supplier plans rarely produce one. Surplus beyond the grid export limit is curtailed. Solar is part of the *Balanced* and *Cheap self-consumption* modes (max profit still ignores the house and the panels).
+- **Export limit.** The battery's *Maximum discharge power* also stands for the grid export limit: enter the lower of the battery's limit and the limit you are allowed.
+- **Free energy** binary sensor: on while energy costs nothing or would be wasted (a buy price of zero or less, or solar surplus the battery cannot absorb that would be exported for nothing or curtailed; the battery is assumed to charge greedily until full, as an inverter in its normal mode does), for automations that run heavy loads such as a heat pump. Attributes: `reason`, `until`, `next_start`, `next_end` and the `windows` ahead.
+- **Several solar production sensors** can be picked on *House consumption*; they are added up. The live production shapes the next hour (a cloudier or sunnier moment than forecast), and the plan is redone early when it differs from the forecast by 0.75 kW or more.
+- **Expected solar today / tomorrow** sensors (when a forecast exists). The *Plan* rows gain `solar_kwh`, `solar_to_battery_kwh`, `grid_import_kwh`, `grid_export_kwh` and `curtailed_kwh`; charge windows gain `from_solar_kwh`; the net gain attributes gain `energy_from_solar_kwh` and `solar_curtailed_kwh`.
+- **Plan** sensor: the plan interval by interval, for charts and cards. Its `plan` attribute has one row per interval from now to the end of tomorrow: buy and sell price, the action, energy bought, delivered, to the house and exported, the house's expected use, the battery level (kWh and %) and the running earnings, expenses and net result. Three ready-made apexcharts cards use it (`examples/dashboards/`): `battery-plan.yaml` (actions over the prices), `battery-soc.yaml` (level, energy moved and house use) and `battery-gain.yaml` (running earnings and expenses).
+- **The plan follows what is happening.** The live house power, averaged over about ten minutes, shapes the next hour or two and fades back to the usual pattern, so an oven or a washing machine that is on now counts. The plan is also redone ahead of the 15-minute step when the house uses 0.75 kW more or less than assumed, or when the battery holds 1 kWh more or less than expected (at most every five minutes). The `house_load_shift_kw` attribute shows the correction.
+- **Net result today / tomorrow** sensors: the net gain plus the change in the value of the energy left in the battery. In the house modes the plan runs the battery down, and refilling it is paid for the next day; the net result shows that cost on the day it happens, so it is the figure to compare the modes with. The net gain stays the cash figure (earnings minus expenses minus battery wear).
+
+### Changed
+- **Tomorrow's plan starts where today's plan leaves the battery** (it used to start at the reserve), so the level continues across midnight. The `starting_energy` attribute says so.
+- The expected house use is worked out in every mode (for the charts), though only the house modes plan with it.
+- The plan is made again as soon as the consumption forecast has been learned after a start, instead of at the next 15-minute step.
+
 ## [0.3.0-snapshot.2] - 2026-11-10
 
 Second slice of the planning modes: the plan can include the house.

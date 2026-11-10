@@ -1,0 +1,108 @@
+# The battery's planned state of charge, with the energy moved in each interval
+# and the house's expected use. The line is the level at the end of each
+# interval if the plan is followed (today starts from your real level, tomorrow
+# from where today ends). Bars are kWh on the right axis: green = bought from
+# the grid, purple = delivered by the battery (to the house or the grid). The
+# grey line is the house's expected use per interval and the yellow line the solar
+# production the plan expects. It follows the plan as it
+# is redone, so an oven or a washing machine shows up within minutes.
+# Needs apexcharts-card (HACS -> Frontend). Entity ids: see battery-plan.yaml.
+type: custom:apexcharts-card
+header:
+  show: true
+  title: Battery level and energy
+graph_span: 48h
+span:
+  start: minute
+now:
+  show: true
+  label: Now
+  color: "#e74c3c"
+yaxis:
+  - id: soc
+    min: 0
+    max: 100
+    decimals: 0
+    apex_config:
+      title:
+        text: "%"
+  - id: kwh
+    opposite: true
+    min: 0
+    decimals: 1
+    apex_config:
+      title:
+        text: kWh per interval
+series:
+  - entity: sensor.battery_planner_plan
+    name: Charge level
+    yaxis_id: soc
+    type: area
+    curve: stepline
+    color: "#3498db"
+    stroke_width: 2
+    float_precision: 1
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || []).map(r => [new Date(r.end).getTime(), r.soc_pct]);
+  - entity: sensor.battery_planner_plan
+    name: Bought from the grid
+    yaxis_id: kwh
+    type: column
+    color: "#2ed573"
+    float_precision: 2
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || [])
+        .filter(r => r.charge_kwh > 0)
+        .map(r => [new Date(r.start).getTime(), r.charge_kwh]);
+  - entity: sensor.battery_planner_plan
+    name: Delivered by the battery
+    yaxis_id: kwh
+    type: column
+    color: "#9b59b6"
+    float_precision: 2
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || [])
+        .filter(r => r.discharge_kwh > 0)
+        .map(r => [new Date(r.start).getTime(), r.discharge_kwh]);
+  - entity: sensor.battery_planner_plan
+    name: House use (expected)
+    yaxis_id: kwh
+    type: line
+    curve: stepline
+    color: "#95a5a6"
+    stroke_width: 1
+    float_precision: 2
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || []).map(r => [new Date(r.start).getTime(), r.load_kwh]);
+  - entity: sensor.battery_planner_plan
+    name: Solar (expected)
+    yaxis_id: kwh
+    type: line
+    curve: stepline
+    color: "#f1c40f"
+    stroke_width: 1
+    float_precision: 2
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || []).map(r => [new Date(r.start).getTime(), r.solar_kwh]);
+  - entity: sensor.battery_planner_plan
+    name: Surplus curtailed
+    yaxis_id: kwh
+    type: column
+    color: "#e67e22"
+    float_precision: 2
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || [])
+        .filter(r => r.curtailed_kwh > 0)
+        .map(r => [new Date(r.start).getTime(), r.curtailed_kwh]);
