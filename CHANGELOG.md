@@ -7,6 +7,19 @@ version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
 [semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
 for fixes.
 
+## [0.3.0-snapshot.2] - 2026-11-10
+
+Second slice of the planning modes: the plan can include the house.
+
+### Added
+- **Planning mode** select: *Max profit* (as before, the default), *Cheap self-consumption* (the battery covers the house and never exports, worth the buy price it avoids) and *Balanced* (covers the house first, then exports what is left). It is remembered across restarts and can be changed from an automation.
+- The house modes use the learned consumption forecast. Without one the plan falls back to max profit and says so in the `mode_note` attribute.
+- **Earnings today / tomorrow** and **Expenses today / tomorrow** sensors next to the net gain. Earnings are the money received for exports plus the purchases avoided at home; the net gain is earnings minus expenses minus battery wear. New attributes: `earnings`, `expenses`, `degradation_cost`, `stored_energy_value`, `energy_to_house_kwh`, `mode`, `expected_consumption_kwh`.
+- Energy left in the battery at the end of the plan is valued at what it would cost to buy again, in the house modes, so the plan does not empty the battery just because the day ends.
+
+### Changed
+- *Net gain per kWh* is per kWh the battery delivers (to the grid or the house). In max profit mode that is the same as before.
+
 ## [0.3.0-snapshot.1] - 2026-11-09
 
 First slice of the planning modes: the planner learns how much the house uses. It does not change the plan yet.
