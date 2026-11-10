@@ -144,7 +144,7 @@ projected state-of-charge curve including solar and load.
   solar = load + battery change) holds in every interval; the consumption
   profile learned from statistics matches a hand-made series.
 
-**Progress.** Slice 1 (house power from the grid, solar, battery and EV sensors, and the consumption forecast learned from the recorder's hourly statistics) is in snapshot 0.3.0-snapshot.1. Next: the cost model and the mode select (slice 2), then solar (slice 3).
+**Progress.** Slice 1 (house power from the grid, solar, battery and EV sensors, and the consumption forecast learned from the recorder's hourly statistics) is in snapshot 0.3.0-snapshot.1. Slice 2 (the cost model with the house, the mode select, earnings and expenses) is in snapshot 0.3.0-snapshot.2. Next: solar (slice 3).
 
 Build this together with the modes (item 2) and before the custom cards (item 1), so the cards can show the house reserve too.
 
