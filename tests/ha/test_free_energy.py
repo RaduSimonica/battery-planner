@@ -78,7 +78,7 @@ async def test_surplus_sun_that_nobody_pays_for_is_free(hass, entry, freezer, mo
     state = hass.states.get(FREE)
     assert state.state == "on"
     assert state.attributes["reason"] in (
-        "solar surplus that would be exported for nothing", "solar surplus beyond what can be stored or exported"
+        "solar surplus that would be exported for nothing", "solar surplus that nobody pays for or the grid cannot take"
     )
     assert state.attributes["windows"][0]["surplus_kwh"] > 1.0
 
@@ -104,3 +104,15 @@ async def test_the_next_free_stretch_is_announced(hass, entry, freezer, monkeypa
     assert state.attributes["next_start"].startswith("2026-11-10T11:00")
     assert state.attributes["next_end"].startswith("2026-11-10T14:00")
     assert [w["from"][:16] for w in state.attributes["windows"]] == ["2026-11-10T11:00"]  # one merged stretch
+
+
+async def test_a_battery_that_would_still_charge_is_not_assumed_full(hass, entry, freezer, monkeypatch):
+    # The plan may stop at a lower level, but an inverter in its normal mode charges from surplus
+    # until the battery is full. 4 kWh at 50% has 2 kWh of room: it takes the first intervals'
+    # surplus, and only then does the rest have nowhere to go.
+    await start(hass, entry, freezer, monkeypatch, prices(sell=-0.2, buy=0.5), forecast=sun(),
+                options={"battery_capacity_kwh": 4}, soc="50")
+    state = hass.states.get(FREE)
+    assert state.state == "off"  # the surplus is going into the battery now
+    assert state.attributes["next_start"] > "2026-11-09T12:00"  # and it is free once the battery is full
+    assert state.attributes["next_start"] < "2026-11-09T14:00"

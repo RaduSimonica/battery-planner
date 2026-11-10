@@ -96,7 +96,7 @@ Add your solar production sensors under *House consumption* (several are added u
 
 ### Free energy
 
-The planner only plans the battery, but the *Free energy* binary sensor tells your automations when it is a good moment for heavy loads (heat pump, washing machine, EV). It is on while the next kWh costs nothing or would be wasted: a buy price of zero or less, or solar surplus that the battery does not take and that would go to the grid for nothing (a sell price of zero or less) or cannot be stored or sold at all. Surplus the plan stores in the battery does not count, as it is not wasted. `windows` lists every such stretch ahead, and `next_start` / `next_end` give the next one when it is off.
+The planner only plans the battery, but the *Free energy* binary sensor tells your automations when it is a good moment for heavy loads (heat pump, washing machine, EV). It is on while the next kWh costs nothing or would be wasted: a buy price of zero or less, or solar surplus that the battery cannot absorb and that would go to the grid for nothing (a sell price of zero or less) or cannot be sold at all. The battery is assumed to charge greedily from surplus until it is full, as an inverter in its normal mode does, even where the plan would stop earlier, so only what it cannot absorb counts. `windows` lists every such stretch ahead, and `next_start` / `next_end` give the next one when it is off.
 
 ```yaml
 triggers:
