@@ -130,3 +130,16 @@ async def test_early_plans_are_spaced_out(hass, entry, freezer):
     hass.states.async_set("sensor.soc", "29", {"unit_of_measurement": "%"})
     await hass.async_block_till_done()
     assert hass.states.get(f"{GAIN}_today").attributes["starting_energy_kwh"] == pytest.approx(2.9)
+
+
+async def test_diagnostics_have_what_a_bug_report_needs(hass, entry, freezer):
+    from custom_components.battery_planner.diagnostics import async_get_config_entry_diagnostics
+
+    await start(hass, entry, freezer)
+    diag = await async_get_config_entry_diagnostics(hass, entry)
+    assert diag["integration_version"] and diag["home_assistant"]["version"]
+    assert diag["mode"] == "max_profit" and diag["price_source"]["intervals"] > 100
+    assert set(diag["plans"]) == {"0", "1"}
+    assert diag["plans"]["0"]["assumptions"]["starting_energy_kwh"] == 10.0
+    assert diag["consumption"]["sensors"] == ["sensor.house"] and diag["consumption"]["days_learned"] > 10
+    assert "solar" in diag and "free_energy_windows" in diag

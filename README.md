@@ -7,6 +7,17 @@ Is it worth buying electricity when it is cheap and selling it when it is dear? 
 - **Your real battery:** optionally pick your state-of-charge and capacity sensors, so today's plan starts from what is actually stored.
 - **A schedule you can use:** net gain, gain per kWh, charge/discharge windows, the action right now, and binary sensors for automations.
 
+> **Beta.** Battery Planner works, but it is young and has not seen a summer yet. Please report what you find in the [issues](https://github.com/RaduSimonica/battery-planner/issues) and attach the diagnostics file (*Settings → Devices & services → Battery Planner → three dots → Download diagnostics*).
+
+## Known limitations
+
+- **The plan advises; it does not control your inverter.** The *Action* sensor and the planned battery level are for you and your automations. An inverter in its normal mode may do something else, for example charge from surplus solar until the battery is full, even where the plan would stop earlier.
+- **Solar forecasts** are read from the Energy dashboard. Forecast.Solar was checked against real data; other providers are assumed to mark each value with the start of its period, as Home Assistant does, and have not been checked.
+- **Surplus is assumed to be curtailable** (for example by limiting the solar chargers) when it cannot be stored or sold at a positive price.
+- **The consumption forecast is an average** per hour of the day for weekdays and weekends. It does not know about the weather, or that a heat pump works harder on a cold day. The live correction helps for an hour or two.
+- **The prices decide everything.** Make sure the price source gives what you really pay and receive, including regulated tariffs, VAT and the way your supplier credits energy you send to the grid.
+- In *Max profit* mode the net result equals the net gain: that mode places no value on the energy left in the battery. Compare the modes with the *Balanced* and *Cheap self-consumption* figures.
+
 ## Install
 
 HACS → Custom repositories → add this repository as *Integration* → install → restart. Then *Settings → Devices & services → Add integration → Battery Planner*.
