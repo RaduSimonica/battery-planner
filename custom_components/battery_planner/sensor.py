@@ -81,6 +81,11 @@ def _plan_attrs(offset: int) -> Callable[[PlanData], dict[str, Any]]:
         out: dict[str, Any] = {"profitable": plan.profitable} | d.info.get(offset, {})
         if plan.profitable:
             out |= {
+                "earnings": round(plan.earnings, 4),
+                "expenses": round(plan.expenses, 4),
+                "degradation_cost": round(plan.degradation_cost, 4),
+                "stored_energy_value": round(plan.stored_value, 4),
+                "energy_to_house_kwh": round(plan.energy_to_house_kwh, 2),
                 "energy_bought_kwh": round(plan.energy_bought_kwh, 2),
                 "energy_sold_kwh": round(plan.energy_sold_kwh, 2),
                 "gain_per_kwh_sold": _round(plan.gain_per_kwh_sold),
@@ -193,6 +198,12 @@ def _descriptions() -> list[PlannerSensorDescription]:
         out.append(PlannerSensorDescription(
             key=f"gain_{day}", unit_kind="money", suggested_display_precision=2,
             value_fn=_plan_value(offset, "net_gain"), attrs_fn=_plan_attrs(offset)))
+        out.append(PlannerSensorDescription(
+            key=f"earnings_{day}", unit_kind="money", suggested_display_precision=2,
+            value_fn=_plan_value(offset, "earnings")))
+        out.append(PlannerSensorDescription(
+            key=f"expenses_{day}", unit_kind="money", suggested_display_precision=2,
+            value_fn=_plan_value(offset, "expenses")))
         out.append(PlannerSensorDescription(
             key=f"gain_per_kwh_{day}", unit_kind="price", suggested_display_precision=3,
             value_fn=_plan_value(offset, "gain_per_kwh_sold")))

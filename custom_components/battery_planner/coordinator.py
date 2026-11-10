@@ -7,6 +7,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
+from math import sqrt
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -16,7 +17,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from . import settings
-from .arbitrage import BatteryParams, Plan, Slot, plan
+from .arbitrage import MAX_PROFIT, MODES, BatteryParams, Plan, Slot, plan
 from .const import (
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
@@ -86,6 +87,13 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         self.load = LoadProfile()  # learned from the recorder's hourly statistics
         self.load_kw: float | None = None  # the house's power now
         self._load_listeners: list[Callable[[], None]] = []
+        self.mode: str = MAX_PROFIT  # set by the mode select, which remembers it
+
+    async def async_set_mode(self, mode: str) -> None:
+        """Plan for another mode, from now on."""
+        if mode in MODES and mode != self.mode:
+            self.mode = mode
+            await self.async_refresh()
 
     @property
     def tracks_load(self) -> bool:
@@ -317,7 +325,7 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         battery = self.battery_inputs()
         now = datetime.now(timezone.utc)
         plans, info, points = await self.hass.async_add_executor_job(
-            self._build_plans, self._series, battery, now
+            self._build_plans, self._series, battery, now, self.mode, self.load
         )
         return PlanData(self._series, self._unit, plans, info, points)
 
@@ -330,7 +338,12 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         return [p for p in points if p.end - p.start == length]
 
     def _build_plans(
-        self, series: PriceSeries, battery: BatteryState, now: datetime
+        self,
+        series: PriceSeries,
+        battery: BatteryState,
+        now: datetime,
+        mode: str = MAX_PROFIT,
+        load: LoadProfile | None = None,
     ) -> tuple[dict[int, Plan], dict[int, dict[str, Any]], dict[int, list[PricePoint]]]:
         """Today: the intervals still ahead, from the real battery level.
         Tomorrow: a full day, battery assumed empty (its level then is unknown).
@@ -348,15 +361,27 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             if not points or points[-1].end < end or points[0].start > start:
                 continue  # the source does not cover this day (yet)
             points = self._uniform(points)
-            slots = [Slot(p.start, p.buy, p.sell) for p in points]
+            hours = (points[0].end - points[0].start).total_seconds() / 3600
+            used_mode, note = mode, None
+            loads = self._loads(points, hours, load, now, tz) if mode != MAX_PROFIT else None
+            if mode != MAX_PROFIT and loads is None:
+                used_mode, note = MAX_PROFIT, "no consumption forecast yet, planned for maximum profit"
+            slots = [
+                Slot(p.start, p.buy, p.sell, load_kwh=loads[i] if loads else 0.0)
+                for i, p in enumerate(points)
+            ]
             if offset == 0:  # the interval in progress has only part of its time left
                 first = points[0]
                 left = (first.end - max(now, first.start)) / (first.end - first.start)
-                slots[0] = replace(slots[0], fraction=left)
-            hours = (points[0].end - points[0].start).total_seconds() / 3600
+                slots[0] = replace(slots[0], fraction=left, load_kwh=slots[0].load_kwh * left)
+            # Energy left at the end is worth what it would cost to buy again: the cheapest
+            # buy price in the next day and a half, through the battery's efficiency.
+            ahead = series.window(points[0].start, points[0].start + timedelta(hours=36))
+            cheapest = min((p.buy for p in ahead), default=0.0)
+            terminal = max(cheapest, 0.0) / sqrt(min(max(battery.params.round_trip_efficiency, 0.01), 1.0))
             # Tomorrow's level is unknown: assume nothing to sell (only the reserve is held).
             start_energy = battery.energy_kwh if offset == 0 else battery.reserve_kwh
-            plans[offset] = plan(slots, hours, battery.params, start_energy)
+            plans[offset] = plan(slots, hours, battery.params, start_energy, used_mode, terminal)
             covered[offset] = points
             info[offset] = {
                 "capacity_kwh": round(battery.usable_kwh, 2),
@@ -364,5 +389,28 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
                 "starting_energy_kwh": round(start_energy, 2),
                 "available_kwh": round(max(start_energy - battery.reserve_kwh, 0.0), 2),
                 "starting_energy": battery.source if offset == 0 else "assumed empty",
+                "mode": used_mode,
             }
+            if note:
+                info[offset]["mode_note"] = note
+            if loads:
+                info[offset]["expected_consumption_kwh"] = round(sum(loads), 2)
         return plans, info, covered
+
+    @staticmethod
+    def _loads(
+        points: list[PricePoint], hours: float, load: LoadProfile | None, now: datetime, tz: Any
+    ) -> list[float] | None:
+        """Expected house energy (kWh) in each interval, or None without a forecast.
+
+        The profile has an hourly value, which is spread over the intervals of that
+        hour. Hours it does not know take the average of those it does.
+        """
+        if not load:
+            return None
+        expected = [load.expected(p.start, now.timestamp(), tz) for p in points]
+        known = [e for e in expected if e is not None]
+        if not known:
+            return None
+        fill = sum(known) / len(known)
+        return [(fill if e is None else e) * hours for e in expected]

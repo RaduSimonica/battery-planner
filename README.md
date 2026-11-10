@@ -49,7 +49,10 @@ It is only worth cycling when that is positive. The planner finds the best sched
 
 | Entity | Meaning |
 |---|---|
-| Net gain today / tomorrow | Planned profit; attributes hold the schedule (charge/discharge windows), energy bought and sold, cycles and the break-even sell price |
+| Net gain today / tomorrow | Earnings minus expenses minus battery wear, against not using the battery. Attributes hold the schedule (charge/discharge windows), energy bought, sold and used by the house, cycles, the break-even sell price and the mode |
+| Earnings today / tomorrow | Money received for energy sold, plus the purchases avoided when the battery powers the house |
+| Expenses today / tomorrow | Money spent buying energy for the battery |
+| Planning mode | Select: *Max profit*, *Cheap self-consumption* or *Balanced*. Remembered across restarts |
 | Net gain per kWh today / tomorrow | Net gain per kWh sold |
 | Action | `charge` / `discharge` / `idle` right now, for automations |
 | Arbitrage profitable today / tomorrow | Binary sensors |
@@ -62,11 +65,23 @@ It is only worth cycling when that is positive. The planner finds the best sched
 
 The two timers look ahead 24 hours by default (*Configure → Timers*, 1 to 48 hours). They tick every minute.
 
+### Planning modes
+
+The *Planning mode* select (also usable from an automation) changes what the plan optimises:
+
+| Mode | What it does |
+|---|---|
+| **Max profit** (default) | Only buys cheap and sells dear. The house is ignored. |
+| **Cheap self-consumption** | Powers the house at the lowest cost. The battery charges in the cheapest hours and discharges only up to what the house uses, never to export. A kWh it saves is worth the *buy* price it avoids. |
+| **Balanced** | Covers the house first, then exports what is left when the sell price pays. |
+
+The two house modes need the consumption forecast (see below). Until it has history the plan falls back to max profit and says so in the `mode_note` attribute. Energy left in the battery at the end of the day is worth what it would cost to buy again (the cheapest buy price in the next day and a half), so the plan does not sell the battery empty when the house will need it tomorrow. The house's expected use per interval is the hourly forecast spread over its quarter hours. Solar is not part of the plan yet.
+
 ### House consumption (optional)
 
 *Configure → House consumption.* Pick how the house's power is measured: a sensor of the house itself, **one grid sensor** (positive = import; tick *flip* if yours reports export as positive), or **two grid sensors** (import and export). With a grid sensor you can add solar production and battery power (positive = charging), so energy that fills the battery or comes from the sun is not counted as house use. An **EV charger** sensor can be added too: it is left out of the house's consumption, because it is a large, unpredictable load that is rarely charged from the home battery.
 
-The planner learns your consumption from Home Assistant's long-term statistics of these sensors (hourly, so they need `state_class: measurement` and a unit of W or kW; most power sensors qualify). It uses the last four weeks, separately for weekdays and weekends, and starts with the history you already have. *Expected consumption next 24 hours* shows the result with the hourly forecast in an attribute. The plan does not use it yet: it is the groundwork for the planning modes in the [roadmap](ROADMAP.md).
+The planner learns your consumption from Home Assistant's long-term statistics of these sensors (hourly, so they need `state_class: measurement` and a unit of W or kW; most power sensors qualify). It uses the last four weeks, separately for weekdays and weekends, and starts with the history you already have. *Expected consumption next 24 hours* shows the result with the hourly forecast in an attribute. The *Cheap self-consumption* and *Balanced* modes use it.
 
 ### Using only part of the battery
 

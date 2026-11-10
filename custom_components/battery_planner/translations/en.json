@@ -181,6 +181,18 @@
       },
       "expected_consumption": {
         "name": "Expected consumption next 24 hours"
+      },
+      "earnings_today": {
+        "name": "Earnings today"
+      },
+      "earnings_tomorrow": {
+        "name": "Earnings tomorrow"
+      },
+      "expenses_today": {
+        "name": "Expenses today"
+      },
+      "expenses_tomorrow": {
+        "name": "Expenses tomorrow"
       }
     },
     "binary_sensor": {
@@ -189,6 +201,16 @@
       },
       "profitable_tomorrow": {
         "name": "Arbitrage profitable tomorrow"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Planning mode",
+        "state": {
+          "max_profit": "Max profit",
+          "self_consumption": "Cheap self-consumption",
+          "balanced": "Balanced"
+        }
       }
     }
   }

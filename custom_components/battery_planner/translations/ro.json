@@ -181,6 +181,18 @@
       },
       "expected_consumption": {
         "name": "Consum estimat în următoarele 24 de ore"
+      },
+      "earnings_today": {
+        "name": "Încasări azi"
+      },
+      "earnings_tomorrow": {
+        "name": "Încasări mâine"
+      },
+      "expenses_today": {
+        "name": "Cheltuieli azi"
+      },
+      "expenses_tomorrow": {
+        "name": "Cheltuieli mâine"
       }
     },
     "binary_sensor": {
@@ -189,6 +201,16 @@
       },
       "profitable_tomorrow": {
         "name": "Arbitraj profitabil mâine"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Mod de planificare",
+        "state": {
+          "max_profit": "Profit maxim",
+          "self_consumption": "Autoconsum ieftin",
+          "balanced": "Echilibrat"
+        }
       }
     }
   }
