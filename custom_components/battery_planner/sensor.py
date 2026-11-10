@@ -14,7 +14,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfEnergy, UnitOfTime
+from homeassistant.const import UnitOfEnergy, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_utc_time_change
@@ -224,6 +224,10 @@ async def async_setup_entry(
         [CountdownSensor(coordinator, "time_to_cheapest_price", "buy", cheapest=True),
          CountdownSensor(coordinator, "time_to_best_sell_price", "sell", cheapest=False)]
     )
+    if coordinator.tracks_load:
+        async_add_entities(
+            [HousePowerSensor(coordinator), ExpectedConsumptionSensor(coordinator)]
+        )
 
 
 class PlannerSensor(PlannerEntity, SensorEntity):
@@ -311,3 +315,57 @@ class CountdownSensor(PlannerEntity, SensorEntity):
         if best is None:
             return None
         return {"at": _local(best.start), "ends_at": _local(best.end), "price": getattr(best, self._side)}
+
+
+class HousePowerSensor(PlannerEntity, SensorEntity):
+    """What the house uses right now, worked out from the picked sensors."""
+
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coordinator: PlannerCoordinator) -> None:
+        super().__init__(coordinator, "house_power")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self.coordinator.add_load_listener(self.async_write_ha_state))
+
+    @property
+    def native_value(self) -> float | None:
+        kw = self.coordinator.load_kw
+        return None if kw is None else round(kw, 3)
+
+
+class ExpectedConsumptionSensor(PlannerEntity, SensorEntity):
+    """Energy the house is expected to use over the next 24 hours, from its own history."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_suggested_display_precision = 1
+    _unrecorded_attributes = frozenset({"forecast"})
+
+    def __init__(self, coordinator: PlannerCoordinator) -> None:
+        super().__init__(coordinator, "expected_consumption")
+
+    def _forecast(self) -> list[tuple[datetime, float | None]]:
+        now = dt_util.utcnow()
+        # From the start of the hour in progress, so the sum is a full 24 hours.
+        return self.coordinator.load.forecast(now, 24, now.timestamp(), dt_util.get_default_time_zone())
+
+    @property
+    def native_value(self) -> float | None:
+        known = [k for _, k in self._forecast() if k is not None]
+        # Fewer than 24 known hours would understate it.
+        return round(sum(known), 2) if len(known) == 24 else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        forecast = self._forecast()
+        return {
+            "days_learned": self.coordinator.load.days_learned(),
+            "hours_known": sum(1 for _, k in forecast if k is not None),
+            "forecast": [
+                {"start": _local(t), "kwh": None if k is None else round(k, 3)} for t, k in forecast
+            ],
+        }
