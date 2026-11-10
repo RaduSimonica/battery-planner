@@ -180,3 +180,31 @@ async def test_the_battery_page_leaves_consumption_alone(hass, entry, freezer):
     )
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "finish"})
     assert entry.options["grid_power_entity"] == "sensor.grid"
+
+
+WITH_EV = "sensor.battery_planner_expected_consumption_with_ev_next_24_hours"
+
+
+async def test_a_second_forecast_keeps_the_ev_charger_in(hass, entry, freezer):
+    freezer.move_to(NOW)
+    import_hours(hass, "sensor.grid", lambda _: 3.0)  # the grid sees 3 kW
+    import_hours(hass, "sensor.ev", lambda _: 2.0, unit="kW")  # of which the car takes 2 kW
+    await async_wait_recording_done(hass)
+    await start(hass, entry, freezer, {**GRID, "ev_power_entity": "sensor.ev"}, sensor__grid=(3000, "W"), sensor__ev=(2, "kW"))
+    await async_wait_recording_done(hass)
+    await hass.async_block_till_done()
+    assert float(hass.states.get(EXPECTED).state) == pytest.approx(24.0)  # the house alone: 1 kW
+    state = hass.states.get(WITH_EV)
+    assert float(state.state) == pytest.approx(72.0)  # with the car: 3 kW
+    assert state.attributes["ev_kwh"] == pytest.approx(48.0) and state.attributes["without_ev_kwh"] == pytest.approx(24.0)
+    assert state.attributes["hours_known"] == 24 and len(state.attributes["forecast"]) == 24
+
+
+async def test_without_an_ev_sensor_there_is_only_one_forecast(hass, entry, freezer):
+    freezer.move_to(NOW)
+    import_hours(hass, "sensor.grid", lambda _: 1.0)
+    await async_wait_recording_done(hass)
+    await start(hass, entry, freezer, GRID, sensor__grid=(1000, "W"))
+    await async_wait_recording_done(hass)
+    await hass.async_block_till_done()
+    assert hass.states.get(EXPECTED) is not None and hass.states.get(WITH_EV) is None

@@ -7,6 +7,12 @@ version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
 [semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
 for fixes.
 
+## [0.4.0-snapshot.2] - 2026-11-11
+
+### Added
+- **An EV charger that follows the solar surplus** is part of the plan. Such a charger starts above some surplus (say 4.6 kW) and then takes most of it, up to its maximum (say 11 kW), leaving the battery only a trickle, so on a sunny day the sun the plan counted on for the battery goes into the car. On *House consumption*, next to the EV sensor, set the **start threshold**, the **maximum power** and **what the battery still gets** (1 kW by default), or switch the option off. The planner learns from the recorder how often the car really charged in hours with a big surplus, and expects it to take that share of the surplus before the battery does. A car that is charging now is expected to go on for an hour or two. The *Plan* rows have `ev_kwh`, the net gain `expected_ev_kwh`, the *Plan* sensor `ev_surplus_probability` and `ev_hours_learned`; the *Free energy* signal leaves the car's share out. With fewer than 8 hours of history with a big surplus nothing is subtracted.
+- **Expected consumption with EV next 24 hours** sensor, when an EV charger sensor is set: the consumption forecast with the car left in (it stays out of the plan and of *Expected consumption*). Attributes: the hourly `forecast`, `ev_kwh` (the car's share) and `without_ev_kwh`. It is an average of what the car drew at each hour, so it suits the day's total, not predicting a particular night.
+
 ## [0.4.0-snapshot.1] - 2026-11-11
 
 ### Added

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Mapping
 
 from .arbitrage import BatteryParams
@@ -14,7 +15,11 @@ from .const import (
     CONF_BATTERY_EFFICIENCY,
     CONF_BATTERY_POWER_ENTITY,
     CONF_BATTERY_POWER_FLIP,
+    CONF_EV_BATTERY_KW,
+    CONF_EV_MAX_KW,
     CONF_EV_POWER_ENTITY,
+    CONF_EV_START_KW,
+    CONF_EV_SURPLUS,
     CONF_GRID_EXPORT_ENTITY,
     CONF_GRID_IMPORT_ENTITY,
     CONF_GRID_POWER_ENTITY,
@@ -58,3 +63,23 @@ def _entities(value: Any) -> tuple[str, ...] | None:
     if not value:
         return None
     return (value,) if isinstance(value, str) else tuple(e for e in value if e)
+
+
+@dataclass(frozen=True, slots=True)
+class EvSurplus:
+    """An EV charger that starts above some solar surplus and follows it up to its maximum."""
+
+    start_kw: float
+    max_kw: float
+    battery_kw: float  # what the battery still gets while the car charges
+
+
+def ev_surplus(options: Mapping[str, Any]) -> EvSurplus | None:
+    """The charger's settings, None without an EV sensor or when the option is off."""
+    if not options.get(CONF_EV_POWER_ENTITY) or not get(options, CONF_EV_SURPLUS):
+        return None
+    return EvSurplus(
+        start_kw=max(float(get(options, CONF_EV_START_KW)), 0.1),
+        max_kw=max(float(get(options, CONF_EV_MAX_KW)), 0.1),
+        battery_kw=max(float(get(options, CONF_EV_BATTERY_KW)), 0.0),
+    )

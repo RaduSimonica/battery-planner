@@ -260,6 +260,7 @@ async def async_setup_entry(
     if coordinator.tracks_load:
         async_add_entities(
             [HousePowerSensor(coordinator), ExpectedConsumptionSensor(coordinator)]
+            + ([ExpectedConsumptionSensor(coordinator, with_ev=True)] if coordinator.load_sources.ev else [])
         )
 
 
@@ -371,37 +372,56 @@ class HousePowerSensor(PlannerEntity, SensorEntity):
 
 
 class ExpectedConsumptionSensor(PlannerEntity, SensorEntity):
-    """Energy the house is expected to use over the next 24 hours, from its own history."""
+    """Energy the house is expected to use over the next 24 hours, from its own history.
+
+    The plain sensor leaves an EV charger out (it is a large, unpredictable load). With
+    ``with_ev`` the charger is left in, as the average of what it has drawn at each hour.
+    """
 
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_suggested_display_precision = 1
     _unrecorded_attributes = frozenset({"forecast"})
 
-    def __init__(self, coordinator: PlannerCoordinator) -> None:
-        super().__init__(coordinator, "expected_consumption")
+    def __init__(self, coordinator: PlannerCoordinator, *, with_ev: bool = False) -> None:
+        super().__init__(coordinator, "expected_consumption_with_ev" if with_ev else "expected_consumption")
+        self._with_ev = with_ev
 
-    def _forecast(self) -> list[tuple[datetime, float | None]]:
+    def _profile(self, with_ev: bool | None = None):
+        use_ev = self._with_ev if with_ev is None else with_ev
+        return self.coordinator.load_with_ev if use_ev else self.coordinator.load
+
+    def _forecast(self, with_ev: bool | None = None) -> list[tuple[datetime, float | None]]:
         now = dt_util.utcnow()
         # From the start of the hour in progress, so the sum is a full 24 hours.
-        return self.coordinator.load.forecast(now, 24, now.timestamp(), dt_util.get_default_time_zone())
+        return self._profile(with_ev).forecast(now, 24, now.timestamp(), dt_util.get_default_time_zone())
 
-    @property
-    def native_value(self) -> float | None:
-        known = [k for _, k in self._forecast() if k is not None]
+    @staticmethod
+    def _total(forecast: list[tuple[datetime, float | None]]) -> float | None:
+        known = [k for _, k in forecast if k is not None]
         # Fewer than 24 known hours would understate it.
         return round(sum(known), 2) if len(known) == 24 else None
 
     @property
+    def native_value(self) -> float | None:
+        return self._total(self._forecast())
+
+    @property
     def extra_state_attributes(self) -> dict[str, Any]:
         forecast = self._forecast()
-        return {
-            "days_learned": self.coordinator.load.days_learned(),
+        out: dict[str, Any] = {
+            "days_learned": self._profile().days_learned(),
             "hours_known": sum(1 for _, k in forecast if k is not None),
             "forecast": [
                 {"start": _local(t), "kwh": None if k is None else round(k, 3)} for t, k in forecast
             ],
         }
+        if self._with_ev:
+            house = self._total(self._forecast(False))
+            total = self._total(forecast)
+            out["ev_kwh"] = None if house is None or total is None else round(max(total - house, 0.0), 2)
+            out["without_ev_kwh"] = house
+        return out
 
 
 class PlanTableSensor(PlannerEntity, SensorEntity):
@@ -429,6 +449,7 @@ class PlanTableSensor(PlannerEntity, SensorEntity):
             by_start = {s.start: s for s in plan.slots}
             loads = d.loads.get(offset) or [0.0] * len(pts)
             sun = d.solar.get(offset) or [0.0] * len(pts)
+            cars = d.ev.get(offset) or [0.0] * len(pts)
             flows = plan.flows if len(plan.flows) == len(pts) else None
             curves = (plan.earnings_curve, plan.expenses_curve, plan.net_curve)
             for i, p in enumerate(pts):
@@ -448,6 +469,7 @@ class PlanTableSensor(PlannerEntity, SensorEntity):
                     "export_kwh": round(out - house, 3),
                     "load_kwh": round(loads[i], 3),
                     "solar_kwh": round(sun[i], 3),
+                    "ev_kwh": round(cars[i], 3),
                     "solar_to_battery_kwh": round(step.from_solar_kwh if step else 0.0, 3),
                     "grid_import_kwh": round(flows[i].grid_import_kwh, 3) if flows else None,
                     "grid_export_kwh": round(flows[i].grid_export_kwh, 3) if flows else None,
@@ -487,6 +509,11 @@ class PlanTableSensor(PlannerEntity, SensorEntity):
             "now_soc_pct": round(plan.soc[0] / total * 100, 1) if plan and plan.soc and total else None,
         }
         out |= {k: v for k, v in info.items() if k in ("house_load_shift_kw", "mode_note")}
+        if self.coordinator.ev_settings:
+            out["ev_surplus_probability"] = (
+                None if self.coordinator.ev_probability is None else round(self.coordinator.ev_probability, 2)
+            )
+            out["ev_hours_learned"] = self.coordinator.ev_samples
         out["plan"] = self._rows()
         return out
 

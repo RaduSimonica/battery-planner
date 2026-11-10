@@ -83,6 +83,7 @@ It is only worth cycling when that is positive. The planner finds the best sched
 | Energy to export today / tomorrow | kWh the plan delivers to the grid, with its `windows` |
 | Projected state of charge today / tomorrow | Battery level (%) at the end of the day if the plan is followed. Attributes: `end_kwh`, `peak_kwh`, `peak_at` and a `curve` (time, kWh, %) for charts. Today starts from your real level, tomorrow from empty |
 | House power, Expected consumption next 24 hours | Only with the consumption sensors above. The expected value comes with an hourly `forecast` |
+| Expected consumption with EV next 24 hours | Only with an EV charger sensor: the same forecast with the car left in. `ev_kwh` is the car's share and `without_ev_kwh` the house alone. The plan keeps using the house-only forecast |
 | Time to cheapest price | Minutes until the cheapest *buy* price starts (`0` = now); `at`, `ends_at` and `price` in the attributes |
 | Time to best sell price | Minutes until the highest *sell* price starts |
 
@@ -113,6 +114,18 @@ Forecast.Solar marks each value with the *end* of its period (plus extra stamps 
 
 Add your solar production sensors under *House consumption* (several are added up) and the live production shapes the next hour: a cloud that is not in the forecast shows up in the plan within minutes. *Expected solar today / tomorrow* show the forecast. The *Plan* rows carry `solar_kwh`, `solar_to_battery_kwh`, `grid_import_kwh`, `grid_export_kwh` and `curtailed_kwh` for charts.
 
+### An EV charger that follows the solar surplus
+
+Many chargers start when the surplus is large (say above 4.6 kW) and then take most of it, up to their maximum (say 11 kW), so the battery only gets a trickle while the car charges. Without this the plan would count that sun for the battery. On *House consumption*, next to the EV sensor, set:
+
+- **Start threshold:** the surplus (the sun minus the house) at which your charger starts.
+- **Maximum power** of the charger.
+- **What the battery still gets** while the car charges, 1 kW by default.
+
+The planner then learns from the recorder how often your car really charged in the hours when the surplus was above the threshold, whatever the reason (not plugged in, full, the house battery too low), and expects it to take that share of the surplus, up to the maximum, before the battery does. A car that is charging right now is expected to carry on for an hour or two. The plan, the *Free energy* signal and the *Plan* rows (`ev_kwh`) use it; the *Plan* sensor shows `ev_surplus_probability` and `ev_hours_learned`. With fewer than 8 hours of history with a big surplus nothing is taken out. Switch *The car follows the solar surplus* off if your charger does not work this way.
+
+It is an expected value: right on average, wrong on a given day. A charger on a fixed schedule or on the grid is not modelled.
+
 ### Free energy
 
 The planner only plans the battery, but the *Free energy* binary sensor tells your automations when it is a good moment for heavy loads (heat pump, washing machine, EV). It is on while the next kWh costs nothing or would be wasted: a buy price of zero or less, or solar surplus that the battery cannot absorb and that would go to the grid for nothing (a sell price of zero or less) or cannot be sold at all. The battery is assumed to charge greedily from surplus until it is full, as an inverter in its normal mode does, even where the plan would stop earlier, so only what it cannot absorb counts. `windows` lists every such stretch ahead, and `next_start` / `next_end` give the next one when it is off.
@@ -132,7 +145,7 @@ actions:
 
 *Configure → House consumption.* Pick how the house's power is measured: a sensor of the house itself, **one grid sensor** (positive = import; tick *flip* if yours reports export as positive), or **two grid sensors** (import and export). With a grid sensor you can add solar production and battery power (positive = charging), so energy that fills the battery or comes from the sun is not counted as house use. An **EV charger** sensor can be added too: it is left out of the house's consumption, because it is a large, unpredictable load that is rarely charged from the home battery.
 
-The planner learns your consumption from Home Assistant's long-term statistics of these sensors (hourly, so they need `state_class: measurement` and a unit of W or kW; most power sensors qualify). It uses the last four weeks, separately for weekdays and weekends, and starts with the history you already have. *Expected consumption next 24 hours* shows the result with the hourly forecast in an attribute. The *Cheap self-consumption* and *Balanced* modes use it.
+The planner learns your consumption from Home Assistant's long-term statistics of these sensors (hourly, so they need `state_class: measurement` and a unit of W or kW; most power sensors qualify). It uses the last four weeks, separately for weekdays and weekends, and starts with the history you already have. *Expected consumption next 24 hours* shows the result with the hourly forecast in an attribute. With an EV charger sensor, *Expected consumption with EV next 24 hours* adds the car back, for the day's total. It is an average of what the car drew at each hour over four weeks, so it spreads out charging sessions that really happen on a few nights: good for the total, not for predicting which night you plug in. If your charger follows the solar surplus, much of that energy is sun, not grid energy. The *Cheap self-consumption* and *Balanced* modes use it.
 
 ### Using only part of the battery
 

@@ -28,7 +28,15 @@ from .const import (
     SOURCE_ENTITY,
     SOURCE_FIXED,
 )
-from .consumption import KEEP_DAYS, POWER_UNITS, LoadProfile, hourly_kwh, house_power_kw
+from .consumption import (
+    EV_MIN_KW,
+    KEEP_DAYS,
+    POWER_UNITS,
+    LoadProfile,
+    ev_surplus_probability,
+    hourly_kwh,
+    house_power_kw,
+)
 from .prices import PricePoint, PriceSeries, currency_of, local_day_bounds, parse_prices
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,6 +52,7 @@ LOAD_FADE_HOURS = 1.5  # an unexpected load matters for the next hour or two, th
 DRIFT_LOAD_KW = 0.75  # the house uses this much more or less than the plan assumed
 DRIFT_SOC_KWH = 1.0  # the battery holds this much more or less than the plan expected
 DRIFT_PAUSE_S = 300  # at most one extra plan this often
+EV_FADE_HOURS = 1.5  # a car that is charging now is expected to go on for about this long
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +84,7 @@ class PlanData:
     points: dict[int, list[PricePoint]] = field(default_factory=dict)  # what each plan covers
     loads: dict[int, list[float]] = field(default_factory=dict)  # expected house kWh per interval
     solar: dict[int, list[float]] = field(default_factory=dict)  # expected solar kWh per interval
+    ev: dict[int, list[float]] = field(default_factory=dict)  # expected kWh of sun taken by the car
 
     @property
     def currency(self) -> str | None:
@@ -103,6 +113,11 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         # House consumption: only when the user picked sensors for it.
         self.load_sources = settings.load_sources(entry.options)
         self.load = LoadProfile()  # learned from the recorder's hourly statistics
+        self.load_with_ev = LoadProfile()  # the same with the EV charger left in (only with an EV sensor)
+        # A car that follows the solar surplus: how often it charged when there was plenty.
+        self.ev_settings = settings.ev_surplus(entry.options)
+        self.ev_probability: float | None = None
+        self.ev_samples = 0
         self.load_kw: float | None = None  # the house's power now
         self._load_listeners: list[Callable[[], None]] = []
         self.mode: str = MAX_PROFIT  # set by the mode select, which remembers it
@@ -195,6 +210,11 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             return None
         return max(sum(readings), 0.0)
 
+    def _ev_live_kw(self) -> float | None:
+        """What the EV charger draws now (kW), None without a usable sensor."""
+        entity = self.load_sources.ev
+        return self._power_kw(entity) if entity and self.ev_settings else None
+
     @callback
     def _check_drift(self) -> None:
         """Plan again, ahead of the 15-minute step, when reality leaves the plan behind.
@@ -285,6 +305,12 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             _LOGGER.debug("Could not read the consumption statistics", exc_info=True)
             return
         self.load = LoadProfile(hourly_kwh(self.load_sources, means))
+        if self.load_sources.ev:  # the statistics are already here: just do not take the EV out
+            self.load_with_ev = LoadProfile(hourly_kwh(replace(self.load_sources, ev=None), means))
+        if self.ev_settings:
+            self.ev_probability, self.ev_samples = ev_surplus_probability(
+                self.load_sources, means, self.ev_settings.start_kw
+            )
         await self.async_refresh()  # the plan counts the house from now on
 
     async def _statistics(self) -> dict[str, dict[int, float]]:
@@ -423,12 +449,13 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         now = datetime.now(timezone.utc)
         self._planned_at = now.timestamp()
         forecast = await solar.fetch_forecast(self.hass) if self.has_solar_forecast else []
-        plans, info, points, loads, sun, assumed, assumed_sun = await self.hass.async_add_executor_job(
+        plans, info, points, loads, sun, assumed, assumed_sun, cars = await self.hass.async_add_executor_job(
             self._build_plans,
             self._series, battery, now, self.mode, self.load, self.load_avg_kw, forecast, self._solar_live_kw(),
+            self.ev_settings, self.ev_probability, self._ev_live_kw(),
         )
         self._assumed_kw, self._assumed_solar_kw = assumed, assumed_sun
-        return PlanData(self._series, self._unit, plans, info, points, loads, sun)
+        return PlanData(self._series, self._unit, plans, info, points, loads, sun, cars)
 
     @staticmethod
     def _uniform(points: list[PricePoint]) -> list[PricePoint]:
@@ -448,6 +475,9 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         live_kw: float | None = None,
         forecast: list[solar.Interval] | None = None,
         solar_live_kw: float | None = None,
+        ev: settings.EvSurplus | None = None,
+        ev_probability: float | None = None,
+        ev_live_kw: float | None = None,
     ) -> tuple[
         dict[int, Plan],
         dict[int, dict[str, Any]],
@@ -456,6 +486,7 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         dict[int, list[float]],
         float | None,
         float | None,
+        dict[int, list[float]],
     ]:
         """Today: the intervals still ahead, from the real battery level.
         Tomorrow: a full day, from where today's plan leaves the battery.
@@ -468,6 +499,7 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         covered: dict[int, list[PricePoint]] = {}
         expected: dict[int, list[float]] = {}
         sun: dict[int, list[float]] = {}
+        cars: dict[int, list[float]] = {}
         assumed: float | None = None
         assumed_sun: float | None = None
         tz = dt_util.get_default_time_zone()
@@ -492,8 +524,17 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             production = solar.slot_kwh(points, forecast or [])
             if offset == 0 and forecast:
                 production = solar.follow_live(production, points, hours, now, solar_live_kw)
+            # A car that follows the surplus takes the sun before the battery does.
+            taken = [0.0] * len(points)
+            if ev and loads and ev_probability is not None:
+                taken = self._ev_take(
+                    production, loads, hours, points, now, ev, ev_probability, ev_live_kw if offset == 0 else None
+                )
             slots = [
-                Slot(p.start, p.buy, p.sell, load_kwh=loads[i] if loads else 0.0, solar_kwh=production[i])
+                Slot(
+                    p.start, p.buy, p.sell, load_kwh=loads[i] if loads else 0.0,
+                    solar_kwh=max(production[i] - taken[i], 0.0),
+                )
                 for i, p in enumerate(points)
             ]
             if offset == 0:  # the interval in progress has only part of its time left
@@ -523,6 +564,7 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             covered[offset] = points
             expected[offset] = loads or [0.0] * len(points)
             sun[offset] = production
+            cars[offset] = taken
             info[offset] = {
                 "capacity_kwh": round(battery.usable_kwh, 2),
                 "reserve_kwh": round(battery.reserve_kwh, 2),
@@ -539,7 +581,9 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
                 info[offset]["house_load_shift_kw"] = round(shift, 2)
             if forecast:
                 info[offset]["expected_solar_kwh"] = round(sum(production), 2)
-        return plans, info, covered, expected, sun, assumed, assumed_sun
+            if ev and ev_probability is not None:
+                info[offset]["expected_ev_kwh"] = round(sum(taken), 2)
+        return plans, info, covered, expected, sun, assumed, assumed_sun, cars
 
     @staticmethod
     def _loads(
@@ -574,3 +618,32 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             ahead = max((p.start - now).total_seconds() / 3600, 0.0)
             energies[i] = max(energies[i] + shift * hours * exp(-ahead / LOAD_FADE_HOURS), 0.0)
         return energies, shift
+
+    @staticmethod
+    def _ev_take(
+        production: list[float],
+        loads: list[float],
+        hours: float,
+        points: list[PricePoint],
+        now: datetime,
+        ev: settings.EvSurplus,
+        probability: float,
+        live_kw: float | None,
+    ) -> list[float]:
+        """The sun (kWh per interval) a car that follows the surplus is expected to take.
+
+        When the surplus is above the car's start threshold it takes what is left after the
+        battery's trickle, up to its maximum, as often as it did in the past. If it is
+        charging now, that carries on for an hour or two and then fades into the usual.
+        """
+        out = []
+        for i, p in enumerate(points):
+            surplus_kw = (production[i] - loads[i]) / hours
+            room_kw = min(max(surplus_kw - ev.battery_kw, 0.0), ev.max_kw)
+            usual = probability * room_kw if surplus_kw >= ev.start_kw else 0.0
+            kw = usual
+            if live_kw is not None and live_kw >= EV_MIN_KW:
+                weight = exp(-max((p.start - now).total_seconds() / 3600, 0.0) / EV_FADE_HOURS)
+                kw = weight * min(live_kw, room_kw) + (1 - weight) * usual
+            out.append(max(kw, 0.0) * hours)
+        return out

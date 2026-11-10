@@ -138,7 +138,11 @@
           "solar_power_entity": "Senzori producție solară",
           "battery_power_entity": "Senzor putere baterie",
           "battery_power_flip": "Senzorul raportează descărcarea ca pozitivă",
-          "ev_power_entity": "Senzor putere încărcător auto (opțional)"
+          "ev_power_entity": "Senzor putere încărcător auto (opțional)",
+          "ev_takes_surplus": "Mașina urmărește surplusul solar",
+          "ev_start_surplus_kw": "Mașina: pornește peste acest surplus",
+          "ev_max_power_kw": "Mașina: putere maximă de încărcare",
+          "ev_battery_trickle_kw": "Mașina: cât mai primește bateria"
         },
         "data_description": {
           "house_power_entity": "Folosește-l dacă un senzor spune deja puterea casei. Ceilalți sunt atunci ignorați.",
@@ -147,7 +151,11 @@
           "grid_export_entity": "Puterea trimisă în rețea, mereu pozitivă.",
           "solar_power_entity": "Unul sau mai mulți senzori în W sau kW; se adună. Folosiți pentru consumul casei și ca să urmărească ce produc acum panourile.",
           "battery_power_entity": "Pozitiv la încărcare, negativ la descărcare.",
-          "ev_power_entity": "Scos din consumul casei: o mașină electrică e o sarcină mare și imprevizibilă, rar încărcată din bateria casei."
+          "ev_power_entity": "Scos din consumul casei: o mașină electrică e o sarcină mare și imprevizibilă, rar încărcată din bateria casei.",
+          "ev_takes_surplus": "Pentru un încărcător care se încarcă din surplusul solar. Planul se așteaptă atunci ca mașina să ia o parte din soare înaintea bateriei, la fel de des ca în trecut. Are nevoie de senzorul mașinii, un senzor solar și câteva săptămâni de istoric.",
+          "ev_start_surplus_kw": "Surplusul (soare minus casă) la care pornește încărcătorul, în kW.",
+          "ev_max_power_kw": "Cât poate trage cel mult încărcătorul, în kW.",
+          "ev_battery_trickle_kw": "Cât timp se încarcă mașina, bateria primește totuși aproximativ atât din surplus, în kW. 1 kW e tipic."
         }
       },
       "source_entity": {
@@ -268,6 +276,9 @@
       },
       "expected_solar_tomorrow": {
         "name": "Producție solară estimată mâine"
+      },
+      "expected_consumption_with_ev": {
+        "name": "Consum estimat cu mașina electrică în următoarele 24 de ore"
       }
     },
     "binary_sensor": {

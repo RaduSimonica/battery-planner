@@ -180,3 +180,37 @@ class LoadProfile:
             (moment, self.expected(moment, now, tz))
             for moment in (first + timedelta(hours=i) for i in range(hours))
         ]
+
+
+# -- an EV charger that follows the solar surplus ---------------------------------
+
+EV_MIN_KW = 1.0  # the car counts as charging above this
+EV_MIN_HOURS = 8  # hours with a big surplus needed before the history says anything
+
+
+def ev_surplus_probability(
+    sources: LoadSources, means: dict[str, dict[int, float]], start_kw: float
+) -> tuple[float | None, int]:
+    """How often the car charged in hours when the surplus was above its start threshold.
+
+    The surplus is the sun minus the house (without the car). Whatever keeps the car from
+    charging on a given day (not plugged in, full, the house battery too low) is in the
+    answer. Returns (the share of those hours, the number of hours), None for the share when
+    there are too few hours to say anything, or when the sources are not enough.
+    """
+    if not sources.ev or not sources.solar_entities:
+        return None, 0
+    house = hourly_kwh(sources, means)
+    car = means.get(sources.ev, {})
+    sun = [means.get(e, {}) for e in sources.solar_entities]
+    big = charging = 0
+    for hour, house_kw in house.items():
+        if hour not in car or any(hour not in s for s in sun):
+            continue
+        surplus = max(sum(s[hour] for s in sun) - house_kw, 0.0)
+        if surplus >= start_kw:
+            big += 1
+            charging += car[hour] >= EV_MIN_KW
+    if big < EV_MIN_HOURS:
+        return None, big
+    return charging / big, big
