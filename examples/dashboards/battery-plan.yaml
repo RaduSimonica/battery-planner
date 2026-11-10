@@ -17,13 +17,14 @@ header:
   title: Battery plan
 graph_span: 48h
 span:
-  start: minute
+  start: day
 now:
   show: true
   label: Now
   color: "#e74c3c"
 series:
   - entity: sensor.battery_planner_plan
+    extend_to: false
     name: Buy price
     type: line
     curve: stepline
@@ -35,6 +36,7 @@ series:
     data_generator: |
       return (entity.attributes.plan || []).map(r => [new Date(r.start).getTime(), r.buy]);
   - entity: sensor.battery_planner_plan
+    extend_to: false
     name: Sell price
     type: line
     curve: stepline
@@ -46,6 +48,7 @@ series:
     data_generator: |
       return (entity.attributes.plan || []).map(r => [new Date(r.start).getTime(), r.sell]);
   - entity: sensor.battery_planner_plan
+    extend_to: false
     name: Charge from the grid
     type: column
     color: "#2ed573"
@@ -54,9 +57,10 @@ series:
       in_header: false
     data_generator: |
       return (entity.attributes.plan || [])
-        .filter(r => r.charge_kwh > 0)
+        .filter(r => r.charge_kwh > 0.02)  // ignore rounding dust
         .map(r => [new Date(r.start).getTime(), r.buy]);
   - entity: sensor.battery_planner_plan
+    extend_to: false
     name: Charge from the sun
     type: column
     color: "#f1c40f"
@@ -65,9 +69,10 @@ series:
       in_header: false
     data_generator: |
       return (entity.attributes.plan || [])
-        .filter(r => r.charge_kwh === 0 && r.solar_to_battery_kwh > 0)
+        .filter(r => r.charge_kwh <= 0.02 && r.solar_to_battery_kwh > 0.01)
         .map(r => [new Date(r.start).getTime(), r.sell]);
   - entity: sensor.battery_planner_plan
+    extend_to: false
     name: Discharge
     type: column
     color: "#9b59b6"
