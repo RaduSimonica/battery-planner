@@ -45,11 +45,13 @@ For one kWh bought at `b` and sold later at `s`:
 net gain per kWh sold = s − degradation − b / efficiency
 ```
 
-It is only worth cycling when that is positive. The planner finds the best schedule for the rest of the day (several cycles allowed, capacity and power respected) using the buy and sell prices of the source. Energy already stored counts as free, since its cost is sunk. **Today's** plan starts from the real state of charge (or an empty battery without a sensor) and is re-planned every 15 minutes. **Tomorrow's** plan always assumes an empty battery, as nobody knows the level by then.
+It is only worth cycling when that is positive. The planner finds the best schedule for the rest of the day (several cycles allowed, capacity and power respected) using the buy and sell prices of the source. Energy already stored counts as free, since its cost is sunk. **Today's** plan starts from the real state of charge (or an empty battery without a sensor) and is re-planned every 15 minutes. **Tomorrow's** plan starts where today's plan leaves the battery.
 
 | Entity | Meaning |
 |---|---|
 | Net gain today / tomorrow | Earnings minus expenses minus battery wear, against not using the battery. Attributes hold the schedule (charge/discharge windows), energy bought, sold and used by the house, cycles, the break-even sell price and the mode |
+| Net result today / tomorrow | The net gain plus the value of the energy the plan leaves in the battery, at what it would cost to buy again. Use it to compare the modes: a mode that runs the battery down looks better in the net gain and worse here, because the refill is paid the next day |
+| Plan | The whole plan interval by interval for charts and cards: the `plan` attribute lists price, action, energy bought, delivered, to the house and exported, expected house use, battery level and running earnings, expenses and net result, from now to the end of tomorrow |
 | Earnings today / tomorrow | Money received for energy sold, plus the purchases avoided when the battery powers the house |
 | Expenses today / tomorrow | Money spent buying energy for the battery |
 | Planning mode | Select: *Max profit*, *Cheap self-consumption* or *Balanced*. Remembered across restarts |
@@ -89,9 +91,21 @@ The planner learns your consumption from Home Assistant's long-term statistics o
 
 Not financial advice: results depend on your inputs and on the prices the source publishes.
 
-## Dashboard
+## Dashboards
 
-[`examples/dashboards/battery-plan.yaml`](examples/dashboards/battery-plan.yaml) is a ready-to-paste card (needs [apexcharts-card](https://github.com/RomRider/apexcharts-card)). Entity IDs depend on the area of the device (see the note in the file).
+Ready-to-paste cards are in [`examples/dashboards/`](examples/dashboards) (they need [apexcharts-card](https://github.com/RomRider/apexcharts-card)). All three read the *Plan* sensor, so they show the next intervals as the plan is redone:
+
+| File | Shows |
+|---|---|
+| `battery-plan.yaml` | When the battery charges from the grid and discharges, over the buy and sell prices |
+| `battery-soc.yaml` | The planned battery level, the energy moved in each interval and the house's expected use |
+| `battery-gain.yaml` | The running earnings, expenses and net result over the plan |
+
+Entity IDs depend on the area of the device (see the note in each file).
+
+### The plan follows what you do
+
+The plan is redone every 15 minutes from the real battery level. It is also redone sooner when the house uses clearly more or less than assumed for now (an oven, a washing machine), or when the battery holds clearly more or less than planned. The live house power, averaged over about ten minutes, shapes the next hour or two and then fades back to the usual pattern.
 
 ## Moving from OPCOM PZU 0.2.x
 

@@ -7,6 +7,18 @@ version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
 [semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
 for fixes.
 
+## [0.3.0-snapshot.3] - 2026-11-10
+
+### Added
+- **Plan** sensor: the plan interval by interval, for charts and cards. Its `plan` attribute has one row per interval from now to the end of tomorrow: buy and sell price, the action, energy bought, delivered, to the house and exported, the house's expected use, the battery level (kWh and %) and the running earnings, expenses and net result. Three ready-made apexcharts cards use it (`examples/dashboards/`): `battery-plan.yaml` (actions over the prices), `battery-soc.yaml` (level, energy moved and house use) and `battery-gain.yaml` (running earnings and expenses).
+- **The plan follows what is happening.** The live house power, averaged over about ten minutes, shapes the next hour or two and fades back to the usual pattern, so an oven or a washing machine that is on now counts. The plan is also redone ahead of the 15-minute step when the house uses 0.75 kW more or less than assumed, or when the battery holds 1 kWh more or less than expected (at most every five minutes). The `house_load_shift_kw` attribute shows the correction.
+- **Net result today / tomorrow** sensors: the net gain plus the change in the value of the energy left in the battery. In the house modes the plan runs the battery down, and refilling it is paid for the next day; the net result shows that cost on the day it happens, so it is the figure to compare the modes with. The net gain stays the cash figure (earnings minus expenses minus battery wear).
+
+### Changed
+- **Tomorrow's plan starts where today's plan leaves the battery** (it used to start at the reserve), so the level continues across midnight. The `starting_energy` attribute says so.
+- The expected house use is worked out in every mode (for the charts), though only the house modes plan with it.
+- The plan is made again as soon as the consumption forecast has been learned after a start, instead of at the next 15-minute step.
+
 ## [0.3.0-snapshot.2] - 2026-11-10
 
 Second slice of the planning modes: the plan can include the house.

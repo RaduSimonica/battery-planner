@@ -7,7 +7,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
-from math import sqrt
+from math import exp, sqrt
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -34,6 +34,13 @@ _LOGGER = logging.getLogger(__name__)
 _CAPACITY_UNITS: dict[str | None, float] = {None: 1.0, "kWh": 1.0, "Wh": 0.001}
 
 UNAVAILABLE = ("unknown", "unavailable")
+
+# Following what is really happening, between the 15-minute plans.
+LOAD_SMOOTHING_S = 600  # the live house power is averaged over about ten minutes
+LOAD_FADE_HOURS = 1.5  # an unexpected load matters for the next hour or two, then the pattern rules
+DRIFT_LOAD_KW = 0.75  # the house uses this much more or less than the plan assumed
+DRIFT_SOC_KWH = 1.0  # the battery holds this much more or less than the plan expected
+DRIFT_PAUSE_S = 300  # at most one extra plan this often
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +70,7 @@ class PlanData:
     plans: dict[int, Plan] = field(default_factory=dict)  # by day offset from the local today
     info: dict[int, dict[str, Any]] = field(default_factory=dict)  # what each plan assumed
     points: dict[int, list[PricePoint]] = field(default_factory=dict)  # what each plan covers
+    loads: dict[int, list[float]] = field(default_factory=dict)  # expected house kWh per interval
 
     @property
     def currency(self) -> str | None:
@@ -88,6 +96,10 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         self.load_kw: float | None = None  # the house's power now
         self._load_listeners: list[Callable[[], None]] = []
         self.mode: str = MAX_PROFIT  # set by the mode select, which remembers it
+        self.load_avg_kw: float | None = None  # the house's power, smoothed
+        self._avg_at: float | None = None
+        self._assumed_kw: float | None = None  # what the last plan assumed for the interval in progress
+        self._planned_at: float = 0.0
 
     async def async_set_mode(self, mode: str) -> None:
         """Plan for another mode, from now on."""
@@ -148,6 +160,38 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             return
         if old is None or old.state in UNAVAILABLE:
             self.hass.async_create_task(self.async_refresh())
+        else:
+            self._check_drift()
+
+    @callback
+    def _check_drift(self) -> None:
+        """Plan again, ahead of the 15-minute step, when reality leaves the plan behind.
+
+        Either the house uses clearly more or less than the plan assumed for now
+        (an oven, a washing machine), or the battery holds clearly more or less than
+        the plan expected. The new plan starts from what is really happening.
+        """
+        now = dt_util.utcnow().timestamp()
+        plan0, points = (self.data.plans.get(0), self.data.points.get(0)) if self.data else (None, None)
+        if plan0 is None or not points or now - self._planned_at < DRIFT_PAUSE_S:
+            return
+        reasons = []
+        if self.load_avg_kw is not None and self._assumed_kw is not None:
+            if abs(self.load_avg_kw - self._assumed_kw) >= DRIFT_LOAD_KW:
+                reasons.append("house load")
+        battery = self.battery_inputs()
+        here = next((i for i, p in enumerate(points) if p.start.timestamp() <= now < p.end.timestamp()), None)
+        if (
+            battery.source == "sensor"
+            and here is not None
+            and len(plan0.soc) > here
+            and abs(battery.energy_kwh - plan0.soc[here]) >= DRIFT_SOC_KWH
+        ):
+            reasons.append("battery level")
+        if reasons:
+            _LOGGER.debug("Planning again early: %s differs from the plan", " and ".join(reasons))
+            self._planned_at = now
+            self.hass.async_create_task(self.async_refresh())
 
     @callback
     def _tick(self, _now: datetime) -> None:
@@ -175,8 +219,17 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
     def _sample(self) -> None:
         """Work out the house's power from the sensors, for the live sensor."""
         self.load_kw = house_power_kw(self.load_sources, self._power_kw)
+        if self.load_kw is not None:
+            now = dt_util.utcnow().timestamp()
+            if self.load_avg_kw is None or self._avg_at is None:
+                self.load_avg_kw = self.load_kw
+            else:
+                weight = 1 - exp(-max(now - self._avg_at, 0.0) / LOAD_SMOOTHING_S)
+                self.load_avg_kw += weight * (self.load_kw - self.load_avg_kw)
+            self._avg_at = now
         for listener in list(self._load_listeners):
             listener()
+        self._check_drift()
 
     @callback
     def _load_sensor_changed(self, _event: Event[EventStateChangedData]) -> None:
@@ -196,7 +249,7 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             _LOGGER.debug("Could not read the consumption statistics", exc_info=True)
             return
         self.load = LoadProfile(hourly_kwh(self.load_sources, means))
-        self.async_update_listeners()
+        await self.async_refresh()  # the plan counts the house from now on
 
     async def _statistics(self) -> dict[str, dict[int, float]]:
         """Hourly mean power (kW) of every consumption sensor, from long-term statistics."""
@@ -324,10 +377,12 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         self._read_source()
         battery = self.battery_inputs()
         now = datetime.now(timezone.utc)
-        plans, info, points = await self.hass.async_add_executor_job(
-            self._build_plans, self._series, battery, now, self.mode, self.load
+        self._planned_at = now.timestamp()
+        plans, info, points, loads, assumed = await self.hass.async_add_executor_job(
+            self._build_plans, self._series, battery, now, self.mode, self.load, self.load_avg_kw
         )
-        return PlanData(self._series, self._unit, plans, info, points)
+        self._assumed_kw = assumed
+        return PlanData(self._series, self._unit, plans, info, points, loads)
 
     @staticmethod
     def _uniform(points: list[PricePoint]) -> list[PricePoint]:
@@ -344,13 +399,25 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         now: datetime,
         mode: str = MAX_PROFIT,
         load: LoadProfile | None = None,
-    ) -> tuple[dict[int, Plan], dict[int, dict[str, Any]], dict[int, list[PricePoint]]]:
+        live_kw: float | None = None,
+    ) -> tuple[
+        dict[int, Plan],
+        dict[int, dict[str, Any]],
+        dict[int, list[PricePoint]],
+        dict[int, list[float]],
+        float | None,
+    ]:
         """Today: the intervals still ahead, from the real battery level.
-        Tomorrow: a full day, battery assumed empty (its level then is unknown).
+        Tomorrow: a full day, from where today's plan leaves the battery.
+
+        Also returns the expected house energy per interval, and the power the plan
+        assumed for the interval in progress (what drift is measured against).
         """
         plans: dict[int, Plan] = {}
         info: dict[int, dict[str, Any]] = {}
         covered: dict[int, list[PricePoint]] = {}
+        expected: dict[int, list[float]] = {}
+        assumed: float | None = None
         tz = dt_util.get_default_time_zone()
         today = dt_util.now().date()
         for offset in (0, 1):
@@ -363,7 +430,10 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             points = self._uniform(points)
             hours = (points[0].end - points[0].start).total_seconds() / 3600
             used_mode, note = mode, None
-            loads = self._loads(points, hours, load, now, tz) if mode != MAX_PROFIT else None
+            # What the house is expected to use. The plan only counts it in the house modes,
+            # but it is always worked out, for the charts. Today starts from what is
+            # happening now, fading back to the usual pattern.
+            loads, shift = self._loads(points, hours, load, now, tz, live_kw if offset == 0 else None)
             if mode != MAX_PROFIT and loads is None:
                 used_mode, note = MAX_PROFIT, "no consumption forecast yet, planned for maximum profit"
             slots = [
@@ -374,43 +444,69 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
                 first = points[0]
                 left = (first.end - max(now, first.start)) / (first.end - first.start)
                 slots[0] = replace(slots[0], fraction=left, load_kwh=slots[0].load_kwh * left)
+                if loads:
+                    assumed = loads[0] / hours
             # Energy left at the end is worth what it would cost to buy again: the cheapest
             # buy price in the next day and a half, through the battery's efficiency.
             ahead = series.window(points[0].start, points[0].start + timedelta(hours=36))
             cheapest = min((p.buy for p in ahead), default=0.0)
             terminal = max(cheapest, 0.0) / sqrt(min(max(battery.params.round_trip_efficiency, 0.01), 1.0))
-            # Tomorrow's level is unknown: assume nothing to sell (only the reserve is held).
-            start_energy = battery.energy_kwh if offset == 0 else battery.reserve_kwh
+            # Tomorrow starts where today's plan leaves the battery (the reserve if there is none).
+            if offset == 0:
+                start_energy, origin = battery.energy_kwh, battery.source
+            elif 0 in plans and plans[0].soc:
+                start_energy, origin = plans[0].soc[-1], "end of today's plan"
+            else:
+                start_energy, origin = battery.reserve_kwh, "assumed empty"
             plans[offset] = plan(slots, hours, battery.params, start_energy, used_mode, terminal)
             covered[offset] = points
+            expected[offset] = loads or [0.0] * len(points)
             info[offset] = {
                 "capacity_kwh": round(battery.usable_kwh, 2),
                 "reserve_kwh": round(battery.reserve_kwh, 2),
                 "starting_energy_kwh": round(start_energy, 2),
                 "available_kwh": round(max(start_energy - battery.reserve_kwh, 0.0), 2),
-                "starting_energy": battery.source if offset == 0 else "assumed empty",
+                "starting_energy": origin,
                 "mode": used_mode,
             }
             if note:
                 info[offset]["mode_note"] = note
             if loads:
                 info[offset]["expected_consumption_kwh"] = round(sum(loads), 2)
-        return plans, info, covered
+            if shift is not None:
+                info[offset]["house_load_shift_kw"] = round(shift, 2)
+        return plans, info, covered, expected, assumed
 
     @staticmethod
     def _loads(
-        points: list[PricePoint], hours: float, load: LoadProfile | None, now: datetime, tz: Any
-    ) -> list[float] | None:
+        points: list[PricePoint],
+        hours: float,
+        load: LoadProfile | None,
+        now: datetime,
+        tz: Any,
+        live_kw: float | None = None,
+    ) -> tuple[list[float] | None, float | None]:
         """Expected house energy (kWh) in each interval, or None without a forecast.
 
         The profile has an hourly value, which is spread over the intervals of that
-        hour. Hours it does not know take the average of those it does.
+        hour. Hours it does not know take the average of those it does. With the live
+        house power, the difference between it and the pattern for the interval in
+        progress is carried forward and fades away over a couple of hours: an oven
+        that is on now will be on a little longer, a house that is empty stays quiet.
+        Returns the energies and that difference in kW (None when not applied).
         """
         if not load:
-            return None
+            return None, None
         expected = [load.expected(p.start, now.timestamp(), tz) for p in points]
         known = [e for e in expected if e is not None]
         if not known:
-            return None
+            return None, None
         fill = sum(known) / len(known)
-        return [(fill if e is None else e) * hours for e in expected]
+        energies = [(fill if e is None else e) * hours for e in expected]
+        if live_kw is None:
+            return energies, None
+        shift = live_kw - energies[0] / hours
+        for i, p in enumerate(points):
+            ahead = max((p.start - now).total_seconds() / 3600, 0.0)
+            energies[i] = max(energies[i] + shift * hours * exp(-ahead / LOAD_FADE_HOURS), 0.0)
+        return energies, shift

@@ -90,6 +90,11 @@ class Plan:
     # Stored energy (kWh) before each slot, and after the last: len(slots_in) + 1
     # values, the first being the starting level. Flat when nothing is planned.
     soc: list[float] = field(default_factory=list)
+    # Running totals before each slot and after the last (len(slots_in) + 1 values, from 0):
+    # money received, money spent, and the cash result (earnings - expenses - wear).
+    earnings_curve: list[float] = field(default_factory=list)
+    expenses_curve: list[float] = field(default_factory=list)
+    net_curve: list[float] = field(default_factory=list)
 
 
 def break_even_sell_price(buy_price: float, params: BatteryParams) -> float:
@@ -181,6 +186,7 @@ def plan(
     soc = start_units
     level = initial_kwh
     curve = [level]
+    earn_curve, spend_curve, net_curve = [0.0], [0.0], [0.0]
     bought = delivered_total = to_house = 0.0
     earnings = expenses = degradation = 0.0
     for t, slot in enumerate(slots):
@@ -201,6 +207,9 @@ def plan(
             degradation += delivered * params.degradation_per_kwh
             result.slots.append(PlanSlot(slot.start, "discharge", delivered, money / delivered, covers))
         soc += move
+        earn_curve.append(earnings)
+        spend_curve.append(expenses)
+        net_curve.append(earnings - expenses - degradation)
 
     # Stored energy above the reserve at the end, against at the start, at its replacement cost.
     stored = (max(soc - floor, 0) - max(start_units - floor, 0)) * step * terminal
@@ -212,6 +221,7 @@ def plan(
         result.soc = [initial_kwh] * (n + 1)
         return result
     result.soc = curve
+    result.earnings_curve, result.expenses_curve, result.net_curve = earn_curve, spend_curve, net_curve
     result.earnings, result.expenses, result.degradation_cost = earnings, expenses, degradation
     result.stored_value = stored
     result.energy_bought_kwh = bought

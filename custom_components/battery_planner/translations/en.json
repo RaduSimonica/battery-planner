@@ -193,6 +193,15 @@
       },
       "expenses_tomorrow": {
         "name": "Expenses tomorrow"
+      },
+      "net_result_today": {
+        "name": "Net result today"
+      },
+      "net_result_tomorrow": {
+        "name": "Net result tomorrow"
+      },
+      "plan": {
+        "name": "Plan"
       }
     },
     "binary_sensor": {

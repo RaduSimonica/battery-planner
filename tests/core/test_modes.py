@@ -136,3 +136,15 @@ def test_energy_balance_per_slot():
             expected = level - s.grid_kwh / eff
         assert p.soc[i + 1] == pytest.approx(expected, abs=0.06)
         level = p.soc[i + 1]
+
+
+def test_running_totals_follow_the_plan():
+    p = run(BALANCED, terminal=0.4)
+    n = 96
+    assert len(p.earnings_curve) == len(p.expenses_curve) == len(p.net_curve) == len(p.soc) == n + 1
+    assert p.earnings_curve[0] == p.expenses_curve[0] == p.net_curve[0] == 0.0
+    assert p.earnings_curve[-1] == pytest.approx(p.earnings)
+    assert p.expenses_curve[-1] == pytest.approx(p.expenses)
+    assert p.net_curve[-1] == pytest.approx(p.net_gain)
+    assert all(b >= a - 1e-9 for a, b in zip(p.earnings_curve, p.earnings_curve[1:]))  # only grows
+    assert all(b >= a - 1e-9 for a, b in zip(p.expenses_curve, p.expenses_curve[1:]))

@@ -193,6 +193,15 @@
       },
       "expenses_tomorrow": {
         "name": "Cheltuieli mâine"
+      },
+      "net_result_today": {
+        "name": "Rezultat net azi"
+      },
+      "net_result_tomorrow": {
+        "name": "Rezultat net mâine"
+      },
+      "plan": {
+        "name": "Plan"
       }
     },
     "binary_sensor": {

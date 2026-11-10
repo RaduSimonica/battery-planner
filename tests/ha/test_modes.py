@@ -44,7 +44,7 @@ async def test_the_mode_select_starts_at_max_profit(hass, entry, freezer):
 async def test_max_profit_ignores_the_house(hass, entry, freezer):
     await start(hass, entry, freezer, HOUSE)
     attrs = hass.states.get(GAIN).attributes
-    assert attrs["energy_to_house_kwh"] == 0 and "expected_consumption_kwh" not in attrs
+    assert attrs["energy_to_house_kwh"] == 0  # the house is not part of the plan
     assert float(hass.states.get(EXPORT).state) > 0  # it sells
 
 
@@ -91,3 +91,25 @@ async def test_the_mode_survives_a_reload(hass, entry, freezer):
     await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert hass.states.get(MODE).state == "self_consumption"
+
+
+async def test_the_net_result_adds_the_value_of_what_is_left(hass, entry, freezer):
+    await start(hass, entry, freezer, HOUSE)
+    for option in ("max_profit", "self_consumption", "balanced"):
+        await choose(hass, option)
+        for day in ("today", "tomorrow"):
+            attrs = hass.states.get(f"sensor.battery_planner_net_gain_{day}").attributes
+            gain = float(hass.states.get(f"sensor.battery_planner_net_gain_{day}").state)
+            result = float(hass.states.get(f"sensor.battery_planner_net_result_{day}").state)
+            stored = attrs.get("stored_energy_value", 0.0)
+            assert result == pytest.approx(gain + stored, abs=0.01)
+
+
+async def test_running_the_battery_down_lowers_the_net_result(hass, entry, freezer):
+    hass.states.async_set("sensor.soc", "100", {"unit_of_measurement": "%"})
+    await start(hass, entry, freezer, {**HOUSE, "battery_soc_entity": "sensor.soc", "battery_usable_pct": 50})
+    await choose(hass, "balanced")
+    gain = float(hass.states.get("sensor.battery_planner_net_gain_today").state)
+    result = float(hass.states.get("sensor.battery_planner_net_result_today").state)
+    assert hass.states.get("sensor.battery_planner_net_gain_today").attributes["stored_energy_value"] < 0
+    assert result < gain
