@@ -268,6 +268,9 @@
       },
       "expected_solar_tomorrow": {
         "name": "Expected solar tomorrow"
+      },
+      "expected_consumption_with_ev": {
+        "name": "Expected consumption with EV next 24 hours"
       }
     },
     "binary_sensor": {

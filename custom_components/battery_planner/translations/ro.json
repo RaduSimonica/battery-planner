@@ -268,6 +268,9 @@
       },
       "expected_solar_tomorrow": {
         "name": "Producție solară estimată mâine"
+      },
+      "expected_consumption_with_ev": {
+        "name": "Consum estimat cu mașina electrică în următoarele 24 de ore"
       }
     },
     "binary_sensor": {

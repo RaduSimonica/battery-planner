@@ -83,6 +83,7 @@ It is only worth cycling when that is positive. The planner finds the best sched
 | Energy to export today / tomorrow | kWh the plan delivers to the grid, with its `windows` |
 | Projected state of charge today / tomorrow | Battery level (%) at the end of the day if the plan is followed. Attributes: `end_kwh`, `peak_kwh`, `peak_at` and a `curve` (time, kWh, %) for charts. Today starts from your real level, tomorrow from empty |
 | House power, Expected consumption next 24 hours | Only with the consumption sensors above. The expected value comes with an hourly `forecast` |
+| Expected consumption with EV next 24 hours | Only with an EV charger sensor: the same forecast with the car left in. `ev_kwh` is the car's share and `without_ev_kwh` the house alone. The plan keeps using the house-only forecast |
 | Time to cheapest price | Minutes until the cheapest *buy* price starts (`0` = now); `at`, `ends_at` and `price` in the attributes |
 | Time to best sell price | Minutes until the highest *sell* price starts |
 
@@ -132,7 +133,7 @@ actions:
 
 *Configure → House consumption.* Pick how the house's power is measured: a sensor of the house itself, **one grid sensor** (positive = import; tick *flip* if yours reports export as positive), or **two grid sensors** (import and export). With a grid sensor you can add solar production and battery power (positive = charging), so energy that fills the battery or comes from the sun is not counted as house use. An **EV charger** sensor can be added too: it is left out of the house's consumption, because it is a large, unpredictable load that is rarely charged from the home battery.
 
-The planner learns your consumption from Home Assistant's long-term statistics of these sensors (hourly, so they need `state_class: measurement` and a unit of W or kW; most power sensors qualify). It uses the last four weeks, separately for weekdays and weekends, and starts with the history you already have. *Expected consumption next 24 hours* shows the result with the hourly forecast in an attribute. The *Cheap self-consumption* and *Balanced* modes use it.
+The planner learns your consumption from Home Assistant's long-term statistics of these sensors (hourly, so they need `state_class: measurement` and a unit of W or kW; most power sensors qualify). It uses the last four weeks, separately for weekdays and weekends, and starts with the history you already have. *Expected consumption next 24 hours* shows the result with the hourly forecast in an attribute. With an EV charger sensor, *Expected consumption with EV next 24 hours* adds the car back, for the day's total. It is an average of what the car drew at each hour over four weeks, so it spreads out charging sessions that really happen on a few nights: good for the total, not for predicting which night you plug in. If your charger follows the solar surplus, much of that energy is sun, not grid energy. The *Cheap self-consumption* and *Balanced* modes use it.
 
 ### Using only part of the battery
 

@@ -7,6 +7,11 @@ version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
 [semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
 for fixes.
 
+## [0.4.0-snapshot.2] - 2026-11-11
+
+### Added
+- **Expected consumption with EV next 24 hours** sensor, when an EV charger sensor is set: the consumption forecast with the car left in (it stays out of the plan and of *Expected consumption*). Attributes: the hourly `forecast`, `ev_kwh` (the car's share) and `without_ev_kwh`. It is an average of what the car drew at each hour, so it suits the day's total, not predicting a particular night.
+
 ## [0.4.0-snapshot.1] - 2026-11-11
 
 ### Added

@@ -103,6 +103,7 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         # House consumption: only when the user picked sensors for it.
         self.load_sources = settings.load_sources(entry.options)
         self.load = LoadProfile()  # learned from the recorder's hourly statistics
+        self.load_with_ev = LoadProfile()  # the same with the EV charger left in (only with an EV sensor)
         self.load_kw: float | None = None  # the house's power now
         self._load_listeners: list[Callable[[], None]] = []
         self.mode: str = MAX_PROFIT  # set by the mode select, which remembers it
@@ -285,6 +286,8 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             _LOGGER.debug("Could not read the consumption statistics", exc_info=True)
             return
         self.load = LoadProfile(hourly_kwh(self.load_sources, means))
+        if self.load_sources.ev:  # the statistics are already here: just do not take the EV out
+            self.load_with_ev = LoadProfile(hourly_kwh(replace(self.load_sources, ev=None), means))
         await self.async_refresh()  # the plan counts the house from now on
 
     async def _statistics(self) -> dict[str, dict[int, float]]:
