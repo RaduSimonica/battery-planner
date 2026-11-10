@@ -449,6 +449,7 @@ class PlanTableSensor(PlannerEntity, SensorEntity):
             by_start = {s.start: s for s in plan.slots}
             loads = d.loads.get(offset) or [0.0] * len(pts)
             sun = d.solar.get(offset) or [0.0] * len(pts)
+            cars = d.ev.get(offset) or [0.0] * len(pts)
             flows = plan.flows if len(plan.flows) == len(pts) else None
             curves = (plan.earnings_curve, plan.expenses_curve, plan.net_curve)
             for i, p in enumerate(pts):
@@ -468,6 +469,7 @@ class PlanTableSensor(PlannerEntity, SensorEntity):
                     "export_kwh": round(out - house, 3),
                     "load_kwh": round(loads[i], 3),
                     "solar_kwh": round(sun[i], 3),
+                    "ev_kwh": round(cars[i], 3),
                     "solar_to_battery_kwh": round(step.from_solar_kwh if step else 0.0, 3),
                     "grid_import_kwh": round(flows[i].grid_import_kwh, 3) if flows else None,
                     "grid_export_kwh": round(flows[i].grid_export_kwh, 3) if flows else None,
@@ -507,6 +509,11 @@ class PlanTableSensor(PlannerEntity, SensorEntity):
             "now_soc_pct": round(plan.soc[0] / total * 100, 1) if plan and plan.soc and total else None,
         }
         out |= {k: v for k, v in info.items() if k in ("house_load_shift_kw", "mode_note")}
+        if self.coordinator.ev_settings:
+            out["ev_surplus_probability"] = (
+                None if self.coordinator.ev_probability is None else round(self.coordinator.ev_probability, 2)
+            )
+            out["ev_hours_learned"] = self.coordinator.ev_samples
         out["plan"] = self._rows()
         return out
 

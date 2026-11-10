@@ -71,11 +71,12 @@ def free_windows(d: PlanData, battery: BatteryParams) -> list[dict[str, Any]]:
         by_start = {s.start: s for s in plan.slots}
         loads = d.loads.get(offset) or [0.0] * len(points)
         sun = d.solar.get(offset) or [0.0] * len(points)
+        car = d.ev.get(offset) or [0.0] * len(points)  # the sun a car that follows the surplus takes
         # Where the battery would be if it also took every spare kWh of sun, as the plan's own
         # moves go on. Today starts from the real level; tomorrow carries on from today.
         level = plan.soc[0] if level is None else level
         for i, p in enumerate(points):
-            surplus = max(sun[i] - loads[i], 0.0)
+            surplus = max(sun[i] - loads[i] - car[i], 0.0)
             planned = by_start.get(p.start)
             stored = planned.from_solar_kwh if planned else 0.0
             after_plan = min(max(level + plan.soc[i + 1] - plan.soc[i], 0.0), total)

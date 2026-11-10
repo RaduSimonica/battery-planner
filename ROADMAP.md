@@ -98,7 +98,7 @@ the grid setpoint or the charge and discharge limits for the current interval.
   with a forecast attribute), a safety margin option (use 80% of the forecast), a per-array
   view, and checking providers other than Forecast.Solar against real data.
 - An option for systems that cannot curtail surplus solar.
-- **An EV charger in the plan.** Many chargers take solar surplus: they start above a threshold (say 4.6 kW) and follow the surplus up to their maximum (say 11 kW), and in manual mode draw from the grid. Today the car is left out of the plan, so on a sunny day with the car plugged in the surplus the plan sees is overstated: part of it goes into the car. Add the charger's start threshold and maximum power as settings and take that energy out of the surplus. To settle first: whether the car takes only what would be exported, or competes with the battery for the sun.
+- **An EV charger in the plan:** first version done in 0.4.0 (a charger that follows the surplus takes its learned share of it before the battery does). To do: whether the car really competes with the battery or only with the export in other systems, a charger on a schedule, and learning the start threshold and the battery's trickle from the history instead of asking.
 
 ## 7. More price sources
 

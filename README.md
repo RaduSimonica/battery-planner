@@ -114,6 +114,18 @@ Forecast.Solar marks each value with the *end* of its period (plus extra stamps 
 
 Add your solar production sensors under *House consumption* (several are added up) and the live production shapes the next hour: a cloud that is not in the forecast shows up in the plan within minutes. *Expected solar today / tomorrow* show the forecast. The *Plan* rows carry `solar_kwh`, `solar_to_battery_kwh`, `grid_import_kwh`, `grid_export_kwh` and `curtailed_kwh` for charts.
 
+### An EV charger that follows the solar surplus
+
+Many chargers start when the surplus is large (say above 4.6 kW) and then take most of it, up to their maximum (say 11 kW), so the battery only gets a trickle while the car charges. Without this the plan would count that sun for the battery. On *House consumption*, next to the EV sensor, set:
+
+- **Start threshold:** the surplus (the sun minus the house) at which your charger starts.
+- **Maximum power** of the charger.
+- **What the battery still gets** while the car charges, 1 kW by default.
+
+The planner then learns from the recorder how often your car really charged in the hours when the surplus was above the threshold, whatever the reason (not plugged in, full, the house battery too low), and expects it to take that share of the surplus, up to the maximum, before the battery does. A car that is charging right now is expected to carry on for an hour or two. The plan, the *Free energy* signal and the *Plan* rows (`ev_kwh`) use it; the *Plan* sensor shows `ev_surplus_probability` and `ev_hours_learned`. With fewer than 8 hours of history with a big surplus nothing is taken out. Switch *The car follows the solar surplus* off if your charger does not work this way.
+
+It is an expected value: right on average, wrong on a given day. A charger on a fixed schedule or on the grid is not modelled.
+
 ### Free energy
 
 The planner only plans the battery, but the *Free energy* binary sensor tells your automations when it is a good moment for heavy loads (heat pump, washing machine, EV). It is on while the next kWh costs nothing or would be wasted: a buy price of zero or less, or solar surplus that the battery cannot absorb and that would go to the grid for nothing (a sell price of zero or less) or cannot be sold at all. The battery is assumed to charge greedily from surplus until it is full, as an inverter in its normal mode does, even where the plan would stop earlier, so only what it cannot absorb counts. `windows` lists every such stretch ahead, and `next_start` / `next_end` give the next one when it is off.

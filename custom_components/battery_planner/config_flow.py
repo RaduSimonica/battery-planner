@@ -31,7 +31,11 @@ from .const import (
     CONF_BATTERY_POWER_FLIP,
     CONF_BATTERY_SOC_ENTITY,
     CONF_BATTERY_USABLE,
+    CONF_EV_BATTERY_KW,
+    CONF_EV_MAX_KW,
     CONF_EV_POWER_ENTITY,
+    CONF_EV_START_KW,
+    CONF_EV_SURPLUS,
     CONF_FIXED_BUY,
     CONF_FIXED_SELL,
     CONF_GRID_EXPORT_ENTITY,
@@ -97,6 +101,10 @@ def consumption_schema() -> dict:
         vol.Optional(CONF_BATTERY_POWER_ENTITY): _SENSOR,
         vol.Optional(CONF_BATTERY_POWER_FLIP, default=False): BooleanSelector(),
         vol.Optional(CONF_EV_POWER_ENTITY): _SENSOR,
+        vol.Optional(CONF_EV_SURPLUS, default=True): BooleanSelector(),
+        vol.Optional(CONF_EV_START_KW, default=4.6): _num(0.1, 50, 0.1, "kW"),
+        vol.Optional(CONF_EV_MAX_KW, default=11): _num(0.1, 50, 0.1, "kW"),
+        vol.Optional(CONF_EV_BATTERY_KW, default=1): _num(0, 50, 0.1, "kW"),
     }
 
 

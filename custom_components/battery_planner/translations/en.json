@@ -138,7 +138,11 @@
           "solar_power_entity": "Solar production sensors",
           "battery_power_entity": "Battery power sensor",
           "battery_power_flip": "Battery sensor reports discharging as positive",
-          "ev_power_entity": "EV charger power sensor (optional)"
+          "ev_power_entity": "EV charger power sensor (optional)",
+          "ev_takes_surplus": "The car follows the solar surplus",
+          "ev_start_surplus_kw": "Car: starts above this surplus",
+          "ev_max_power_kw": "Car: maximum charge power",
+          "ev_battery_trickle_kw": "Car: what the battery still gets"
         },
         "data_description": {
           "house_power_entity": "Use this if one sensor already tells the house's power. The others are then ignored.",
@@ -147,7 +151,11 @@
           "grid_export_entity": "Power sent to the grid, always positive.",
           "solar_power_entity": "One or several sensors in W or kW; they are added up. Used to work out the house's consumption and to follow what the panels make now.",
           "battery_power_entity": "Positive while charging, negative while discharging.",
-          "ev_power_entity": "Left out of the house's consumption: an EV is a big, unpredictable load that is rarely charged from the home battery."
+          "ev_power_entity": "Left out of the house's consumption: an EV is a big, unpredictable load that is rarely charged from the home battery.",
+          "ev_takes_surplus": "For an EV charger that charges from solar surplus. The plan then expects the car to take part of the sun before the battery does, as often as it did in the past. Needs the EV sensor, a solar sensor and a few weeks of history.",
+          "ev_start_surplus_kw": "The surplus (sun minus the house) at which the charger starts, in kW.",
+          "ev_max_power_kw": "The most the charger can draw, in kW.",
+          "ev_battery_trickle_kw": "While the car charges, the battery still gets about this much of the surplus, in kW. 1 kW is typical."
         }
       },
       "source_entity": {

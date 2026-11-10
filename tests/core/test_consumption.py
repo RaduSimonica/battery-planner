@@ -153,3 +153,51 @@ def test_several_solar_sensors_are_added_up():
     assert house_power_kw(src, reader(g=-1.0, s1=2.0, s2=1.5)) is None  # one is missing: no guess
     assert LoadSources(grid="g", solar=["s1", "s2"]).entities == ["g", "s1", "s2"]
     assert LoadSources(grid="g", solar="s1").solar_entities == ("s1",)
+
+
+# -- an EV charger that follows the surplus -------------------------------------------
+
+
+def surplus_history(sun_kw, car_kw, hours=40):
+    """Hourly means: a steady 0.8 kW house, ``sun_kw(i)`` of sun and ``car_kw(i)`` for the car."""
+    first = int(ts("2026-10-20T00:00:00+02:00"))
+    stamps = [first + i * HOUR for i in range(hours)]
+    return {
+        "h": {t: 0.8 for t in stamps},
+        "s": {t: sun_kw(i) for i, t in enumerate(stamps)},
+        "e": {t: car_kw(i) for i, t in enumerate(stamps)},
+    }
+
+
+CAR = LoadSources(house="h", solar=("s",), ev="e")
+
+
+def test_the_car_is_learned_from_the_hours_with_a_big_surplus():
+    from custom_components.battery_planner.consumption import ev_surplus_probability
+
+    # 30 hours with 6 kW of sun, the car charging in 21 of them; 10 dull hours that do not count.
+    means = surplus_history(lambda i: 6.0 if i < 30 else 2.0, lambda i: 5.0 if i < 21 else 0.0)
+    probability, hours_seen = ev_surplus_probability(CAR, means, start_kw=4.6)
+    assert hours_seen == 30 and probability == pytest.approx(0.7)
+
+
+def test_the_car_counts_as_charging_only_above_a_threshold():
+    from custom_components.battery_planner.consumption import ev_surplus_probability
+
+    means = surplus_history(lambda i: 6.0, lambda i: 0.4)  # a trickle is not charging
+    assert ev_surplus_probability(CAR, means, 4.6)[0] == 0.0
+
+
+def test_too_few_hours_say_nothing():
+    from custom_components.battery_planner.consumption import ev_surplus_probability
+
+    means = surplus_history(lambda i: 6.0 if i < 5 else 0.0, lambda i: 5.0)
+    assert ev_surplus_probability(CAR, means, 4.6) == (None, 5)
+
+
+def test_without_solar_or_a_car_there_is_nothing_to_learn():
+    from custom_components.battery_planner.consumption import ev_surplus_probability
+
+    means = surplus_history(lambda i: 6.0, lambda i: 5.0)
+    assert ev_surplus_probability(LoadSources(house="h", ev="e"), means, 4.6) == (None, 0)
+    assert ev_surplus_probability(LoadSources(house="h", solar=("s",)), means, 4.6) == (None, 0)

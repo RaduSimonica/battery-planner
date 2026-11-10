@@ -44,6 +44,12 @@ CONF_BATTERY_POWER_ENTITY = "battery_power_entity"  # signed, positive = chargin
 CONF_BATTERY_POWER_FLIP = "battery_power_flip"
 CONF_EV_POWER_ENTITY = "ev_power_entity"  # optional EV charger, left out of the house's power
 
+# An EV charger that follows the solar surplus (options, with the EV sensor).
+CONF_EV_SURPLUS = "ev_takes_surplus"
+CONF_EV_START_KW = "ev_start_surplus_kw"
+CONF_EV_MAX_KW = "ev_max_power_kw"
+CONF_EV_BATTERY_KW = "ev_battery_trickle_kw"
+
 CONSUMPTION_ENTITIES = (
     CONF_HOUSE_POWER_ENTITY,
     CONF_GRID_POWER_ENTITY,
@@ -62,4 +68,8 @@ BATTERY_DEFAULTS = {
     CONF_BATTERY_DEGRADATION: 0.15,
     CONF_BATTERY_USABLE: 100.0,
     CONF_TIMER_HORIZON: 24,
+    CONF_EV_SURPLUS: True,
+    CONF_EV_START_KW: 4.6,
+    CONF_EV_MAX_KW: 11.0,
+    CONF_EV_BATTERY_KW: 1.0,
 }

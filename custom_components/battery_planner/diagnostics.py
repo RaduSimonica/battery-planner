@@ -68,6 +68,15 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Planner
             "days_learned": coordinator.load.days_learned(),
             "hours_known": len(coordinator.load.hourly),
         },
+        "ev_surplus": {
+            "settings": None if coordinator.ev_settings is None else {
+                "start_kw": coordinator.ev_settings.start_kw,
+                "max_kw": coordinator.ev_settings.max_kw,
+                "battery_kw": coordinator.ev_settings.battery_kw,
+            },
+            "probability": coordinator.ev_probability,
+            "hours_with_big_surplus": coordinator.ev_samples,
+        },
         "solar": {
             "forecast_on_energy_dashboard": coordinator.has_solar_forecast,
             "production_sensors": list(coordinator.load_sources.solar_entities),
