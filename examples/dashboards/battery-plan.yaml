@@ -54,8 +54,19 @@ series:
       in_header: false
     data_generator: |
       return (entity.attributes.plan || [])
-        .filter(r => r.action === 'charge')
+        .filter(r => r.charge_kwh > 0)
         .map(r => [new Date(r.start).getTime(), r.buy]);
+  - entity: sensor.battery_planner_plan
+    name: Charge from the sun
+    type: column
+    color: "#f1c40f"
+    float_precision: 4
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || [])
+        .filter(r => r.charge_kwh === 0 && r.solar_to_battery_kwh > 0)
+        .map(r => [new Date(r.start).getTime(), r.sell]);
   - entity: sensor.battery_planner_plan
     name: Discharge
     type: column

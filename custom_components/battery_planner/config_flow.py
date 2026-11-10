@@ -44,6 +44,7 @@ from .prices import currency_of, parse_prices
 
 _PRICE_SOURCE = EntitySelector(EntitySelectorConfig(domain="sensor"))
 _SENSOR = EntitySelector(EntitySelectorConfig(domain=["sensor", "number", "input_number"]))
+_SENSORS = EntitySelector(EntitySelectorConfig(domain=["sensor", "number", "input_number"], multiple=True))
 OPTIONAL_ENTITIES = (CONF_BATTERY_SOC_ENTITY, CONF_BATTERY_CAPACITY_ENTITY)
 
 
@@ -78,11 +79,17 @@ def consumption_schema() -> dict:
         vol.Optional(CONF_GRID_POWER_FLIP, default=False): BooleanSelector(),
         vol.Optional(CONF_GRID_IMPORT_ENTITY): _SENSOR,
         vol.Optional(CONF_GRID_EXPORT_ENTITY): _SENSOR,
-        vol.Optional(CONF_SOLAR_POWER_ENTITY): _SENSOR,
+        vol.Optional(CONF_SOLAR_POWER_ENTITY): _SENSORS,
         vol.Optional(CONF_BATTERY_POWER_ENTITY): _SENSOR,
         vol.Optional(CONF_BATTERY_POWER_FLIP, default=False): BooleanSelector(),
         vol.Optional(CONF_EV_POWER_ENTITY): _SENSOR,
     }
+
+
+def _solar_as_list(options: dict[str, Any]) -> dict[str, Any]:
+    """Older settings kept one production sensor as text; the page now takes a list."""
+    value = options.get(CONF_SOLAR_POWER_ENTITY)
+    return options | {CONF_SOLAR_POWER_ENTITY: [value]} if isinstance(value, str) else options
 
 
 def consumption_errors(values: dict[str, Any]) -> dict[str, str]:
@@ -205,7 +212,7 @@ class BatteryPlannerOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="consumption",
             data_schema=self.add_suggested_values_to_schema(
-                vol.Schema(schema), user_input or _suggested(schema, self._options)
+                vol.Schema(schema), user_input or _suggested(schema, _solar_as_list(self._options))
             ),
             errors=errors,
         )

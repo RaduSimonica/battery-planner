@@ -46,12 +46,14 @@ def _blocks(plan: Plan, step: timedelta) -> list[dict[str, Any]]:
         last = blocks[-1] if blocks else None
         if last and last["action"] == s.action and last["_end"] == s.start:
             last["_end"] = s.start + step
-            last["kwh"] += s.grid_kwh
+            last["kwh"] += s.grid_kwh + s.from_solar_kwh
+            last["solar"] += s.from_solar_kwh
             last["_cost"] += s.grid_kwh * s.price
         else:
             blocks.append(
                 {"action": s.action, "from": s.start, "_end": s.start + step,
-                 "kwh": s.grid_kwh, "_cost": s.grid_kwh * s.price}
+                 "kwh": s.grid_kwh + s.from_solar_kwh, "solar": s.from_solar_kwh,
+                 "_cost": s.grid_kwh * s.price}
             )
     return [
         {
@@ -59,6 +61,7 @@ def _blocks(plan: Plan, step: timedelta) -> list[dict[str, Any]]:
             "from": _local(b["from"]),
             "to": _local(b["_end"]),
             "kwh": round(b["kwh"], 3),
+            **({"from_solar_kwh": round(b["solar"], 3)} if b["action"] == "charge" else {}),
             "avg_price": round(b["_cost"] / b["kwh"], 4),
         }
         for b in blocks
@@ -86,6 +89,8 @@ def _plan_attrs(offset: int) -> Callable[[PlanData], dict[str, Any]]:
                 "degradation_cost": round(plan.degradation_cost, 4),
                 "stored_energy_value": round(plan.stored_value, 4),
                 "energy_to_house_kwh": round(plan.energy_to_house_kwh, 2),
+                "energy_from_solar_kwh": round(plan.energy_from_solar_kwh, 2),
+                "solar_curtailed_kwh": round(plan.curtailed_kwh, 2),
                 "energy_bought_kwh": round(plan.energy_bought_kwh, 2),
                 "energy_sold_kwh": round(plan.energy_sold_kwh, 2),
                 "gain_per_kwh_sold": _round(plan.gain_per_kwh_sold),
@@ -249,6 +254,9 @@ async def async_setup_entry(
          CountdownSensor(coordinator, "time_to_best_sell_price", "sell", cheapest=False)]
     )
     async_add_entities([PlanTableSensor(coordinator)])
+    if coordinator.has_solar_forecast:
+        async_add_entities([ExpectedSolarSensor(coordinator, "expected_solar_today", 0),
+                            ExpectedSolarSensor(coordinator, "expected_solar_tomorrow", 1)])
     if coordinator.tracks_load:
         async_add_entities(
             [HousePowerSensor(coordinator), ExpectedConsumptionSensor(coordinator)]
@@ -420,10 +428,12 @@ class PlanTableSensor(PlannerEntity, SensorEntity):
             total = info["capacity_kwh"] + info["reserve_kwh"]
             by_start = {s.start: s for s in plan.slots}
             loads = d.loads.get(offset) or [0.0] * len(pts)
+            sun = d.solar.get(offset) or [0.0] * len(pts)
+            flows = plan.flows if len(plan.flows) == len(pts) else None
             curves = (plan.earnings_curve, plan.expenses_curve, plan.net_curve)
             for i, p in enumerate(pts):
                 step = by_start.get(p.start)
-                charge = step.grid_kwh if step and step.action == "charge" else 0.0
+                charge = step.grid_kwh if step and step.action == "charge" else 0.0  # from the grid
                 out = step.grid_kwh if step and step.action == "discharge" else 0.0
                 house = step.to_house_kwh if step else 0.0
                 row = {
@@ -437,6 +447,11 @@ class PlanTableSensor(PlannerEntity, SensorEntity):
                     "to_house_kwh": round(house, 3),
                     "export_kwh": round(out - house, 3),
                     "load_kwh": round(loads[i], 3),
+                    "solar_kwh": round(sun[i], 3),
+                    "solar_to_battery_kwh": round(step.from_solar_kwh if step else 0.0, 3),
+                    "grid_import_kwh": round(flows[i].grid_import_kwh, 3) if flows else None,
+                    "grid_export_kwh": round(flows[i].grid_export_kwh, 3) if flows else None,
+                    "curtailed_kwh": round(flows[i].curtailed_kwh, 3) if flows else None,
                     "soc_kwh": round(plan.soc[i + 1], 3),
                     "soc_pct": round(plan.soc[i + 1] / total * 100, 1) if total > 0 else None,
                 }
@@ -474,3 +489,20 @@ class PlanTableSensor(PlannerEntity, SensorEntity):
         out |= {k: v for k, v in info.items() if k in ("house_load_shift_kw", "mode_note")}
         out["plan"] = self._rows()
         return out
+
+
+class ExpectedSolarSensor(PlannerEntity, SensorEntity):
+    """What the panels are expected to make (kWh): the rest of today, or tomorrow."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, coordinator: PlannerCoordinator, key: str, offset: int) -> None:
+        super().__init__(coordinator, key)
+        self._offset = offset
+
+    @property
+    def native_value(self) -> float | None:
+        values = self.coordinator.data.solar.get(self._offset)
+        return None if values is None else round(sum(values), 2)

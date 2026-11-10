@@ -16,7 +16,7 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
-from . import settings
+from . import settings, solar
 from .arbitrage import MAX_PROFIT, MODES, BatteryParams, Plan, Slot, plan
 from .const import (
     CONF_BATTERY_CAPACITY_ENTITY,
@@ -71,6 +71,7 @@ class PlanData:
     info: dict[int, dict[str, Any]] = field(default_factory=dict)  # what each plan assumed
     points: dict[int, list[PricePoint]] = field(default_factory=dict)  # what each plan covers
     loads: dict[int, list[float]] = field(default_factory=dict)  # expected house kWh per interval
+    solar: dict[int, list[float]] = field(default_factory=dict)  # expected solar kWh per interval
 
     @property
     def currency(self) -> str | None:
@@ -99,6 +100,8 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         self.load_avg_kw: float | None = None  # the house's power, smoothed
         self._avg_at: float | None = None
         self._assumed_kw: float | None = None  # what the last plan assumed for the interval in progress
+        self._assumed_solar_kw: float | None = None
+        self.has_solar_forecast = False
         self._planned_at: float = 0.0
 
     async def async_set_mode(self, mode: str) -> None:
@@ -112,6 +115,13 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         return self.load_sources.configured
 
     async def async_start(self) -> None:
+        self.has_solar_forecast = await solar.has_forecast(self.hass)
+        if self.load_sources.solar_entities:  # a sunnier or cloudier moment than forecast
+            self.config_entry.async_on_unload(
+                async_track_state_change_event(
+                    self.hass, list(self.load_sources.solar_entities), self._solar_sensor_changed
+                )
+            )
         if self.tracks_load:
             self._sample()
             self.config_entry.async_on_unload(
@@ -164,6 +174,18 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             self._check_drift()
 
     @callback
+    def _solar_sensor_changed(self, _event: Event[EventStateChangedData]) -> None:
+        self._check_drift()
+
+    def _solar_live_kw(self) -> float | None:
+        """What all the panels make now (kW), None if there is no sensor or one is unusable."""
+        entities = self.load_sources.solar_entities
+        readings = [self._power_kw(e) for e in entities]
+        if not entities or any(r is None for r in readings):
+            return None
+        return max(sum(readings), 0.0)
+
+    @callback
     def _check_drift(self) -> None:
         """Plan again, ahead of the 15-minute step, when reality leaves the plan behind.
 
@@ -179,6 +201,10 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         if self.load_avg_kw is not None and self._assumed_kw is not None:
             if abs(self.load_avg_kw - self._assumed_kw) >= DRIFT_LOAD_KW:
                 reasons.append("house load")
+        live_solar = self._solar_live_kw()
+        if live_solar is not None and self._assumed_solar_kw is not None:
+            if abs(live_solar - self._assumed_solar_kw) >= DRIFT_LOAD_KW:
+                reasons.append("solar production")
         battery = self.battery_inputs()
         here = next((i for i, p in enumerate(points) if p.start.timestamp() <= now < p.end.timestamp()), None)
         if (
@@ -378,11 +404,13 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         battery = self.battery_inputs()
         now = datetime.now(timezone.utc)
         self._planned_at = now.timestamp()
-        plans, info, points, loads, assumed = await self.hass.async_add_executor_job(
-            self._build_plans, self._series, battery, now, self.mode, self.load, self.load_avg_kw
+        forecast = await solar.fetch_forecast(self.hass) if self.has_solar_forecast else []
+        plans, info, points, loads, sun, assumed, assumed_sun = await self.hass.async_add_executor_job(
+            self._build_plans,
+            self._series, battery, now, self.mode, self.load, self.load_avg_kw, forecast, self._solar_live_kw(),
         )
-        self._assumed_kw = assumed
-        return PlanData(self._series, self._unit, plans, info, points, loads)
+        self._assumed_kw, self._assumed_solar_kw = assumed, assumed_sun
+        return PlanData(self._series, self._unit, plans, info, points, loads, sun)
 
     @staticmethod
     def _uniform(points: list[PricePoint]) -> list[PricePoint]:
@@ -400,11 +428,15 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         mode: str = MAX_PROFIT,
         load: LoadProfile | None = None,
         live_kw: float | None = None,
+        forecast: list[solar.Interval] | None = None,
+        solar_live_kw: float | None = None,
     ) -> tuple[
         dict[int, Plan],
         dict[int, dict[str, Any]],
         dict[int, list[PricePoint]],
         dict[int, list[float]],
+        dict[int, list[float]],
+        float | None,
         float | None,
     ]:
         """Today: the intervals still ahead, from the real battery level.
@@ -417,7 +449,9 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         info: dict[int, dict[str, Any]] = {}
         covered: dict[int, list[PricePoint]] = {}
         expected: dict[int, list[float]] = {}
+        sun: dict[int, list[float]] = {}
         assumed: float | None = None
+        assumed_sun: float | None = None
         tz = dt_util.get_default_time_zone()
         today = dt_util.now().date()
         for offset in (0, 1):
@@ -436,16 +470,25 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             loads, shift = self._loads(points, hours, load, now, tz, live_kw if offset == 0 else None)
             if mode != MAX_PROFIT and loads is None:
                 used_mode, note = MAX_PROFIT, "no consumption forecast yet, planned for maximum profit"
+            # What the panels are expected to make; today follows what they make now.
+            production = solar.slot_kwh(points, forecast or [])
+            if offset == 0 and forecast:
+                production = solar.follow_live(production, points, hours, now, solar_live_kw)
             slots = [
-                Slot(p.start, p.buy, p.sell, load_kwh=loads[i] if loads else 0.0)
+                Slot(p.start, p.buy, p.sell, load_kwh=loads[i] if loads else 0.0, solar_kwh=production[i])
                 for i, p in enumerate(points)
             ]
             if offset == 0:  # the interval in progress has only part of its time left
                 first = points[0]
                 left = (first.end - max(now, first.start)) / (first.end - first.start)
-                slots[0] = replace(slots[0], fraction=left, load_kwh=slots[0].load_kwh * left)
+                slots[0] = replace(
+                    slots[0], fraction=left, load_kwh=slots[0].load_kwh * left,
+                    solar_kwh=slots[0].solar_kwh * left,
+                )
                 if loads:
                     assumed = loads[0] / hours
+                if forecast:
+                    assumed_sun = production[0] / hours
             # Energy left at the end is worth what it would cost to buy again: the cheapest
             # buy price in the next day and a half, through the battery's efficiency.
             ahead = series.window(points[0].start, points[0].start + timedelta(hours=36))
@@ -461,6 +504,7 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             plans[offset] = plan(slots, hours, battery.params, start_energy, used_mode, terminal)
             covered[offset] = points
             expected[offset] = loads or [0.0] * len(points)
+            sun[offset] = production
             info[offset] = {
                 "capacity_kwh": round(battery.usable_kwh, 2),
                 "reserve_kwh": round(battery.reserve_kwh, 2),
@@ -475,7 +519,9 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
                 info[offset]["expected_consumption_kwh"] = round(sum(loads), 2)
             if shift is not None:
                 info[offset]["house_load_shift_kw"] = round(shift, 2)
-        return plans, info, covered, expected, assumed
+            if forecast:
+                info[offset]["expected_solar_kwh"] = round(sum(production), 2)
+        return plans, info, covered, expected, sun, assumed, assumed_sun
 
     @staticmethod
     def _loads(

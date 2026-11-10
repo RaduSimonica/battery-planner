@@ -40,14 +40,21 @@ class LoadSources:
     grid_flip: bool = False
     grid_import: str | None = None  # or two sensors, both >= 0
     grid_export: str | None = None
-    solar: str | None = None  # production, >= 0
+    solar: str | tuple[str, ...] | list[str] | None = None  # production, >= 0; several are added up
     battery: str | None = None  # signed, positive = charging (unless flipped)
     battery_flip: bool = False
     ev: str | None = None  # an EV charger, taken out of the house's power
 
     @property
+    def solar_entities(self) -> tuple[str, ...]:
+        """The production sensors (one name or a list, added up)."""
+        if not self.solar:
+            return ()
+        return (self.solar,) if isinstance(self.solar, str) else tuple(self.solar)
+
+    @property
     def entities(self) -> list[str]:
-        found = (self.house, self.grid, self.grid_import, self.grid_export, self.solar, self.battery, self.ev)
+        found = (self.house, self.grid, self.grid_import, self.grid_export, *self.solar_entities, self.battery, self.ev)
         return [e for e in dict.fromkeys(found) if e]
 
     @property
@@ -85,10 +92,11 @@ def house_power_kw(sources: LoadSources, read: Callable[[str], float | None]) ->
     else:
         return None
     solar = 0.0
-    if sources.solar:
-        solar = read(sources.solar)
-        if solar is None:
+    for entity in sources.solar_entities:
+        reading = read(entity)
+        if reading is None:
             return None
+        solar += reading
     charging = 0.0
     if sources.battery:
         charging = read(sources.battery)

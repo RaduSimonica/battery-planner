@@ -144,3 +144,12 @@ def test_the_forecast_runs_from_the_hour_in_progress():
     rows = profile.forecast(now, 5, now.timestamp(), TZ)
     assert len(rows) == 5 and rows[1][0] - rows[0][0] == timedelta(hours=1)
     assert rows[0][0].astimezone(TZ).hour == 10
+
+
+def test_several_solar_sensors_are_added_up():
+    src = LoadSources(grid="g", solar=("s1", "s2", "s3"))
+    # Exporting 1 kW with 2 + 1.5 + 0.5 kW of sun: the house uses 3 kW.
+    assert house_power_kw(src, reader(g=-1.0, s1=2.0, s2=1.5, s3=0.5)) == pytest.approx(3.0)
+    assert house_power_kw(src, reader(g=-1.0, s1=2.0, s2=1.5)) is None  # one is missing: no guess
+    assert LoadSources(grid="g", solar=["s1", "s2"]).entities == ["g", "s1", "s2"]
+    assert LoadSources(grid="g", solar="s1").solar_entities == ("s1",)
