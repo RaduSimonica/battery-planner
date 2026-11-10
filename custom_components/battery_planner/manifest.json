@@ -1,6 +1,7 @@
 {
   "domain": "battery_planner",
   "name": "Battery Planner",
+  "after_dependencies": ["energy"],
   "codeowners": ["@RaduSimonica"],
   "config_flow": true,
   "dependencies": ["recorder"],
