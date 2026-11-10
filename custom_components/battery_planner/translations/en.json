@@ -3,12 +3,10 @@
     "step": {
       "user": {
         "title": "Price source",
-        "description": "Pick the sensor that provides the prices. It must have a `prices` attribute with `start`, `end`, `buy` and `sell` for each interval (per kWh), like the *Upcoming prices* sensor of the OPCOM PZU integration. Prices must already include what you pay and receive (taxes, VAT, commission).",
-        "data": {
-          "price_entity": "Price sensor"
-        },
-        "data_description": {
-          "price_entity": "Needs a `prices` attribute; see the documentation for the format."
+        "description": "Where do the prices come from?",
+        "menu_options": {
+          "source_entity": "A sensor with prices (a spot market)",
+          "source_fixed": "Fixed prices"
         }
       },
       "battery": {
@@ -33,10 +31,42 @@
           "battery_capacity_entity": "Usable capacity in Wh or kWh. Replaces the fixed capacity.",
           "battery_usable_pct": "The planner only works with this share of the capacity. The rest is a reserve at the bottom that is never sold (backup power, your own use). 50% of a 10 kWh battery means 5 kWh to plan with and 5 kWh kept."
         }
+      },
+      "source_entity": {
+        "title": "Price sensor",
+        "description": "Pick the sensor that provides the prices. It must have a `prices` attribute with `start`, `end`, `buy` and `sell` for each interval (per kWh), like the *Upcoming prices* sensor of the OPCOM PZU integration. Prices must already include what you pay and receive (taxes, VAT, commission).",
+        "data": {
+          "price_entity": "Price sensor"
+        },
+        "data_description": {
+          "price_entity": "Needs a `prices` attribute; see the documentation for the format."
+        }
+      },
+      "source_fixed": {
+        "title": "Fixed prices",
+        "description": "For a fixed tariff. Prices per kWh in {currency}, with taxes, network charges and VAT included, as on your bill.\n\nOptionally add a **second rate** for some hours, for example a night rate. It applies from the start time to the end time (it may run past midnight) on the days you pick. Leave it empty if you have one price.",
+        "data": {
+          "fixed_buy_price": "Buy price",
+          "fixed_sell_price": "Sell price",
+          "rate2_from": "Second rate from",
+          "rate2_to": "Second rate until",
+          "rate2_buy_price": "Second rate: buy price",
+          "rate2_sell_price": "Second rate: sell price",
+          "rate2_days": "Second rate applies"
+        },
+        "data_description": {
+          "fixed_buy_price": "What you pay for a kWh from the grid.",
+          "fixed_sell_price": "What you receive for a kWh sent to the grid. 0 if you are not paid for it.",
+          "rate2_from": "Local time, e.g. 22:00.",
+          "rate2_to": "Local time, e.g. 06:00.",
+          "rate2_days": "The day an interval falls on decides it."
+        }
       }
     },
     "error": {
-      "no_prices": "That sensor has no usable `prices` attribute. Pick a sensor that follows the price series format."
+      "no_prices": "That sensor has no usable `prices` attribute. Pick a sensor that follows the price series format.",
+      "rate2_incomplete": "The second rate needs all four of its fields: from, until, buy price and sell price. Fill them all or clear them.",
+      "rate2_same_time": "The second rate starts and ends at the same time. Give it a different end."
     },
     "abort": {
       "single_instance_allowed": "Already configured."
@@ -57,12 +87,10 @@
       },
       "source": {
         "title": "Price source",
-        "description": "Pick the sensor that provides the prices. It must have a `prices` attribute with `start`, `end`, `buy` and `sell` for each interval (per kWh), like the *Upcoming prices* sensor of the OPCOM PZU integration. Prices must already include what you pay and receive (taxes, VAT, commission).",
-        "data": {
-          "price_entity": "Price sensor"
-        },
-        "data_description": {
-          "price_entity": "Needs a `prices` attribute; see the documentation for the format."
+        "description": "Change where the prices come from.",
+        "menu_options": {
+          "source_entity": "A sensor with prices (a spot market)",
+          "source_fixed": "Fixed prices"
         }
       },
       "battery": {
@@ -121,13 +149,45 @@
           "battery_power_entity": "Positive while charging, negative while discharging.",
           "ev_power_entity": "Left out of the house's consumption: an EV is a big, unpredictable load that is rarely charged from the home battery."
         }
+      },
+      "source_entity": {
+        "title": "Price sensor",
+        "description": "Pick the sensor that provides the prices. It must have a `prices` attribute with `start`, `end`, `buy` and `sell` for each interval (per kWh), like the *Upcoming prices* sensor of the OPCOM PZU integration. Prices must already include what you pay and receive (taxes, VAT, commission).",
+        "data": {
+          "price_entity": "Price sensor"
+        },
+        "data_description": {
+          "price_entity": "Needs a `prices` attribute; see the documentation for the format."
+        }
+      },
+      "source_fixed": {
+        "title": "Fixed prices",
+        "description": "For a fixed tariff. Prices per kWh in {currency}, with taxes, network charges and VAT included, as on your bill.\n\nOptionally add a **second rate** for some hours, for example a night rate. It applies from the start time to the end time (it may run past midnight) on the days you pick. Leave it empty if you have one price.",
+        "data": {
+          "fixed_buy_price": "Buy price",
+          "fixed_sell_price": "Sell price",
+          "rate2_from": "Second rate from",
+          "rate2_to": "Second rate until",
+          "rate2_buy_price": "Second rate: buy price",
+          "rate2_sell_price": "Second rate: sell price",
+          "rate2_days": "Second rate applies"
+        },
+        "data_description": {
+          "fixed_buy_price": "What you pay for a kWh from the grid.",
+          "fixed_sell_price": "What you receive for a kWh sent to the grid. 0 if you are not paid for it.",
+          "rate2_from": "Local time, e.g. 22:00.",
+          "rate2_to": "Local time, e.g. 06:00.",
+          "rate2_days": "The day an interval falls on decides it."
+        }
       }
     },
     "error": {
       "no_prices": "That sensor has no usable `prices` attribute. Pick a sensor that follows the price series format.",
       "grid_both": "Use either one grid power sensor or the import and export pair, not both.",
       "grid_pair": "The import and export sensors go together: pick both or neither.",
-      "grid_missing": "Solar and battery power only help together with a grid sensor (or the import and export pair)."
+      "grid_missing": "Solar and battery power only help together with a grid sensor (or the import and export pair).",
+      "rate2_incomplete": "The second rate needs all four of its fields: from, until, buy price and sell price. Fill them all or clear them.",
+      "rate2_same_time": "The second rate starts and ends at the same time. Give it a different end."
     }
   },
   "entity": {
@@ -229,6 +289,15 @@
           "self_consumption": "Cheap self-consumption",
           "balanced": "Balanced"
         }
+      }
+    }
+  },
+  "selector": {
+    "rate2_days": {
+      "options": {
+        "every": "Every day",
+        "weekdays": "Weekdays (Monday to Friday)",
+        "weekends": "Weekends"
       }
     }
   }

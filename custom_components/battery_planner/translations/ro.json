@@ -3,12 +3,10 @@
     "step": {
       "user": {
         "title": "Sursa prețurilor",
-        "description": "Alege senzorul care furnizează prețurile. Trebuie să aibă un atribut `prices` cu `start`, `end`, `buy` și `sell` pentru fiecare interval (per kWh), ca senzorul *Prețuri viitoare* din integrarea OPCOM PZU. Prețurile trebuie să includă deja ce plătești și ce primești (taxe, TVA, comision).",
-        "data": {
-          "price_entity": "Senzor de prețuri"
-        },
-        "data_description": {
-          "price_entity": "Are nevoie de un atribut `prices`; vezi documentația pentru format."
+        "description": "De unde vin prețurile?",
+        "menu_options": {
+          "source_entity": "Un senzor cu prețuri (piață spot)",
+          "source_fixed": "Prețuri fixe"
         }
       },
       "battery": {
@@ -33,10 +31,42 @@
           "battery_capacity_entity": "Capacitate utilizabilă în Wh sau kWh. Înlocuiește capacitatea fixă.",
           "battery_usable_pct": "Planificatorul lucrează doar cu acest procent din capacitate. Restul este o rezervă la baza bateriei care nu se vinde niciodată (curent de rezervă, consumul tău). 50% dintr-o baterie de 10 kWh înseamnă 5 kWh de planificat și 5 kWh păstrați."
         }
+      },
+      "source_entity": {
+        "title": "Senzor de prețuri",
+        "description": "Alege senzorul care furnizează prețurile. Trebuie să aibă un atribut `prices` cu `start`, `end`, `buy` și `sell` pentru fiecare interval (per kWh), ca senzorul *Prețuri viitoare* din integrarea OPCOM PZU. Prețurile trebuie să includă deja ce plătești și ce primești (taxe, TVA, comision).",
+        "data": {
+          "price_entity": "Senzor de prețuri"
+        },
+        "data_description": {
+          "price_entity": "Are nevoie de un atribut `prices`; vezi documentația pentru format."
+        }
+      },
+      "source_fixed": {
+        "title": "Prețuri fixe",
+        "description": "Pentru un tarif fix. Prețuri per kWh în {currency}, cu taxe, tarife de rețea și TVA incluse, ca în factură.\n\nOpțional adaugă un **al doilea tarif** pentru anumite ore, de exemplu tariful de noapte. Se aplică de la ora de început până la ora de sfârșit (poate trece de miezul nopții) în zilele alese. Lasă-l gol dacă ai un singur preț.",
+        "data": {
+          "fixed_buy_price": "Preț de cumpărare",
+          "fixed_sell_price": "Preț de vânzare",
+          "rate2_from": "Al doilea tarif de la",
+          "rate2_to": "Al doilea tarif până la",
+          "rate2_buy_price": "Al doilea tarif: preț de cumpărare",
+          "rate2_sell_price": "Al doilea tarif: preț de vânzare",
+          "rate2_days": "Al doilea tarif se aplică"
+        },
+        "data_description": {
+          "fixed_buy_price": "Cât plătești pentru un kWh din rețea.",
+          "fixed_sell_price": "Cât primești pentru un kWh trimis în rețea. 0 dacă nu ești plătit.",
+          "rate2_from": "Ora locală, ex. 22:00.",
+          "rate2_to": "Ora locală, ex. 06:00.",
+          "rate2_days": "Ziua în care cade intervalul decide."
+        }
       }
     },
     "error": {
-      "no_prices": "Senzorul nu are un atribut `prices` utilizabil. Alege un senzor care respectă formatul seriei de prețuri."
+      "no_prices": "Senzorul nu are un atribut `prices` utilizabil. Alege un senzor care respectă formatul seriei de prețuri.",
+      "rate2_incomplete": "Al doilea tarif are nevoie de toate cele patru câmpuri: de la, până la, preț de cumpărare și preț de vânzare. Completează-le pe toate sau golește-le.",
+      "rate2_same_time": "Al doilea tarif începe și se termină la aceeași oră. Alege alt sfârșit."
     },
     "abort": {
       "single_instance_allowed": "Deja configurat."
@@ -57,12 +87,10 @@
       },
       "source": {
         "title": "Sursa prețurilor",
-        "description": "Alege senzorul care furnizează prețurile. Trebuie să aibă un atribut `prices` cu `start`, `end`, `buy` și `sell` pentru fiecare interval (per kWh), ca senzorul *Prețuri viitoare* din integrarea OPCOM PZU. Prețurile trebuie să includă deja ce plătești și ce primești (taxe, TVA, comision).",
-        "data": {
-          "price_entity": "Senzor de prețuri"
-        },
-        "data_description": {
-          "price_entity": "Are nevoie de un atribut `prices`; vezi documentația pentru format."
+        "description": "Schimbă de unde vin prețurile.",
+        "menu_options": {
+          "source_entity": "Un senzor cu prețuri (piață spot)",
+          "source_fixed": "Prețuri fixe"
         }
       },
       "battery": {
@@ -121,13 +149,45 @@
           "battery_power_entity": "Pozitiv la încărcare, negativ la descărcare.",
           "ev_power_entity": "Scos din consumul casei: o mașină electrică e o sarcină mare și imprevizibilă, rar încărcată din bateria casei."
         }
+      },
+      "source_entity": {
+        "title": "Senzor de prețuri",
+        "description": "Alege senzorul care furnizează prețurile. Trebuie să aibă un atribut `prices` cu `start`, `end`, `buy` și `sell` pentru fiecare interval (per kWh), ca senzorul *Prețuri viitoare* din integrarea OPCOM PZU. Prețurile trebuie să includă deja ce plătești și ce primești (taxe, TVA, comision).",
+        "data": {
+          "price_entity": "Senzor de prețuri"
+        },
+        "data_description": {
+          "price_entity": "Are nevoie de un atribut `prices`; vezi documentația pentru format."
+        }
+      },
+      "source_fixed": {
+        "title": "Prețuri fixe",
+        "description": "Pentru un tarif fix. Prețuri per kWh în {currency}, cu taxe, tarife de rețea și TVA incluse, ca în factură.\n\nOpțional adaugă un **al doilea tarif** pentru anumite ore, de exemplu tariful de noapte. Se aplică de la ora de început până la ora de sfârșit (poate trece de miezul nopții) în zilele alese. Lasă-l gol dacă ai un singur preț.",
+        "data": {
+          "fixed_buy_price": "Preț de cumpărare",
+          "fixed_sell_price": "Preț de vânzare",
+          "rate2_from": "Al doilea tarif de la",
+          "rate2_to": "Al doilea tarif până la",
+          "rate2_buy_price": "Al doilea tarif: preț de cumpărare",
+          "rate2_sell_price": "Al doilea tarif: preț de vânzare",
+          "rate2_days": "Al doilea tarif se aplică"
+        },
+        "data_description": {
+          "fixed_buy_price": "Cât plătești pentru un kWh din rețea.",
+          "fixed_sell_price": "Cât primești pentru un kWh trimis în rețea. 0 dacă nu ești plătit.",
+          "rate2_from": "Ora locală, ex. 22:00.",
+          "rate2_to": "Ora locală, ex. 06:00.",
+          "rate2_days": "Ziua în care cade intervalul decide."
+        }
       }
     },
     "error": {
       "no_prices": "Senzorul nu are un atribut `prices` utilizabil. Alege un senzor care respectă formatul seriei de prețuri.",
       "grid_both": "Folosește fie un senzor de putere de la rețea, fie perechea import și export, nu pe amândouă.",
       "grid_pair": "Senzorii de import și export merg împreună: alege-i pe amândoi sau pe niciunul.",
-      "grid_missing": "Puterea solară și a bateriei ajută doar împreună cu un senzor de rețea (sau perechea import și export)."
+      "grid_missing": "Puterea solară și a bateriei ajută doar împreună cu un senzor de rețea (sau perechea import și export).",
+      "rate2_incomplete": "Al doilea tarif are nevoie de toate cele patru câmpuri: de la, până la, preț de cumpărare și preț de vânzare. Completează-le pe toate sau golește-le.",
+      "rate2_same_time": "Al doilea tarif începe și se termină la aceeași oră. Alege alt sfârșit."
     }
   },
   "entity": {
@@ -229,6 +289,15 @@
           "self_consumption": "Autoconsum ieftin",
           "balanced": "Echilibrat"
         }
+      }
+    }
+  },
+  "selector": {
+    "rate2_days": {
+      "options": {
+        "every": "În fiecare zi",
+        "weekdays": "Zile lucrătoare (luni - vineri)",
+        "weekends": "Weekend"
       }
     }
   }

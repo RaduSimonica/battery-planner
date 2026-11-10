@@ -7,6 +7,14 @@ version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
 [semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
 for fixes.
 
+## [0.4.0-snapshot.1] - 2026-11-11
+
+### Added
+- **Fixed prices** as a price source, for a fixed tariff: a buy price and a sell price per kWh (taxes and VAT included), and an optional **second rate** for some hours (a night rate, for example) with its own buy and sell price, that may run past midnight and applies every day, on weekdays or at weekends. Choose it when adding the integration, or under *Configure → Price source*, where you can also switch back to a price sensor. The planner still stores the sun for later when the buy price is above the sell price, fills the battery at a cheap night rate for the dearer hours, and the *Free energy* signal works when exports earn nothing.
+
+### Changed
+- *Price source* is now a choice between a price sensor and fixed prices (a menu in the setup and in *Configure*). Existing installations keep their sensor.
+
 ## [0.3.0] - 2026-11-10
 
 Planning modes, solar and the house in the plan. Beta: please report what you find in the issues and attach the diagnostics file.

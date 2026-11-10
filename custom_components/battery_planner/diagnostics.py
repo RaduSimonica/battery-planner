@@ -42,7 +42,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Planner
     integration = await async_get_integration(hass, entry.domain)
     info = await async_get_system_info(hass)
     series = data.series
-    state = hass.states.get(coordinator.price_entity)
+    state = hass.states.get(coordinator.price_entity or "")
     return {
         "integration_version": str(integration.version),
         "home_assistant": {"version": info.get("version"), "timezone": str(dt_util.get_default_time_zone())},
@@ -51,6 +51,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Planner
         "options": dict(entry.options),
         "mode": coordinator.mode,
         "price_source": {
+            "type": "fixed" if coordinator.fixed else "entity",
             "entity": coordinator.price_entity,
             "state": state.state if state else None,
             "unit": data.unit,

@@ -14,9 +14,12 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    SelectSelector,
+    SelectSelectorConfig,
+    TimeSelector,
 )
 
-from . import settings
+from . import fixed, settings
 from .const import (
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CAPACITY_ENTITY,
@@ -29,16 +32,27 @@ from .const import (
     CONF_BATTERY_SOC_ENTITY,
     CONF_BATTERY_USABLE,
     CONF_EV_POWER_ENTITY,
+    CONF_FIXED_BUY,
+    CONF_FIXED_SELL,
     CONF_GRID_EXPORT_ENTITY,
     CONF_GRID_IMPORT_ENTITY,
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_POWER_FLIP,
     CONF_HOUSE_POWER_ENTITY,
     CONF_PRICE_ENTITY,
+    CONF_PRICE_SOURCE,
+    CONF_RATE2_BUY,
+    CONF_RATE2_DAYS,
+    CONF_RATE2_FROM,
+    CONF_RATE2_SELL,
+    CONF_RATE2_TO,
     CONF_SOLAR_POWER_ENTITY,
     CONF_TIMER_HORIZON,
     CONSUMPTION_ENTITIES,
     DOMAIN,
+    FIXED_KEYS,
+    SOURCE_ENTITY,
+    SOURCE_FIXED,
 )
 from .prices import currency_of, parse_prices
 
@@ -106,6 +120,52 @@ def consumption_errors(values: dict[str, Any]) -> dict[str, str]:
     return {}
 
 
+def _price() -> NumberSelector:
+    return NumberSelector(NumberSelectorConfig(min=0, max=100, step="any", mode=NumberSelectorMode.BOX))
+
+
+def fixed_schema() -> dict:
+    return {
+        vol.Required(CONF_FIXED_BUY): _price(),
+        vol.Required(CONF_FIXED_SELL): _price(),
+        vol.Optional(CONF_RATE2_FROM): TimeSelector(),
+        vol.Optional(CONF_RATE2_TO): TimeSelector(),
+        vol.Optional(CONF_RATE2_BUY): _price(),
+        vol.Optional(CONF_RATE2_SELL): _price(),
+        vol.Optional(CONF_RATE2_DAYS, default=fixed.EVERY_DAY): SelectSelector(
+            SelectSelectorConfig(options=list(fixed.DAY_CHOICES), translation_key="rate2_days")
+        ),
+    }
+
+
+def fixed_errors(values: dict[str, Any]) -> dict[str, str]:
+    """The second rate needs all of its fields, and a start that differs from its end."""
+    rate2 = (CONF_RATE2_FROM, CONF_RATE2_TO, CONF_RATE2_BUY, CONF_RATE2_SELL)
+    given = [values.get(k) not in (None, "") for k in rate2]
+    if any(given) and not all(given):
+        return {"base": "rate2_incomplete"}
+    if all(given) and values[CONF_RATE2_FROM] == values[CONF_RATE2_TO]:
+        return {"base": "rate2_same_time"}
+    return {}
+
+
+def fixed_data(values: dict[str, Any]) -> dict[str, Any]:
+    """The data stored for fixed prices (an emptied second rate is simply left out)."""
+    keep = {k: v for k, v in values.items() if k in FIXED_KEYS and v not in (None, "")}
+    if not all(k in keep for k in (CONF_RATE2_FROM, CONF_RATE2_TO, CONF_RATE2_BUY, CONF_RATE2_SELL)):
+        for k in (CONF_RATE2_FROM, CONF_RATE2_TO, CONF_RATE2_BUY, CONF_RATE2_SELL, CONF_RATE2_DAYS):
+            keep.pop(k, None)
+    return {CONF_PRICE_SOURCE: SOURCE_FIXED} | keep
+
+
+def source_currency(hass, data: dict[str, Any]) -> str:
+    """The currency of the prices: the sensor's, or Home Assistant's for fixed prices."""
+    if data.get(CONF_PRICE_SOURCE) == SOURCE_FIXED:
+        return hass.config.currency or "currency"
+    state = hass.states.get(data.get(CONF_PRICE_ENTITY, ""))
+    return (currency_of(state.attributes.get("unit")) if state else None) or "currency"
+
+
 def _clear_emptied(
     values: dict[str, Any], submitted: dict[str, Any], keys: tuple[str, ...] = OPTIONAL_ENTITIES
 ) -> dict[str, Any]:
@@ -124,28 +184,45 @@ class BatteryPlannerConfigFlow(ConfigFlow, domain=DOMAIN):
         self._data: dict[str, Any] = {}
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return self.async_show_menu(step_id="user", menu_options=["source_entity", "source_fixed"])
+
+    async def async_step_source_entity(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             state = self.hass.states.get(user_input[CONF_PRICE_ENTITY])
             if state is None or not parse_prices(state.attributes.get("prices")):
                 errors["base"] = "no_prices"
             else:
-                self._data = dict(user_input)
+                self._data = {CONF_PRICE_SOURCE: SOURCE_ENTITY} | dict(user_input)
                 return await self.async_step_battery()
         schema = vol.Schema({vol.Required(CONF_PRICE_ENTITY): _PRICE_SOURCE})
         return self.async_show_form(
-            step_id="user",
+            step_id="source_entity",
             data_schema=self.add_suggested_values_to_schema(schema, self._data),
+            errors=errors,
+        )
+
+    async def async_step_source_fixed(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        schema = fixed_schema()
+        if user_input is not None:
+            errors = fixed_errors(user_input)
+            if not errors:
+                self._data = fixed_data(user_input)
+                return await self.async_step_battery()
+        return self.async_show_form(
+            step_id="source_fixed",
+            data_schema=self.add_suggested_values_to_schema(vol.Schema(schema), user_input or {}),
+            description_placeholders={"currency": self.hass.config.currency or "currency"},
             errors=errors,
         )
 
     async def async_step_battery(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         schema = battery_schema()
         if user_input is not None:
-            state = self.hass.states.get(self._data[CONF_PRICE_ENTITY])
-            code = currency_of(state.attributes.get("unit")) if state else None
+            code = source_currency(self.hass, self._data)
             return self.async_create_entry(
-                title=f"Battery Planner ({code})" if code else "Battery Planner",
+                title=f"Battery Planner ({code})" if code != "currency" else "Battery Planner",
                 data=self._data,
                 options=_clear_emptied({}, user_input),
             )
@@ -156,8 +233,7 @@ class BatteryPlannerConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     def _currency(self) -> str:
-        state = self.hass.states.get(self._data.get(CONF_PRICE_ENTITY, ""))
-        return (currency_of(state.attributes.get("unit")) if state else None) or "currency"
+        return source_currency(self.hass, self._data)
 
     @staticmethod
     @callback
@@ -186,18 +262,36 @@ class BatteryPlannerOptionsFlow(OptionsFlow):
         return self.async_create_entry(data=self._options)
 
     async def async_step_source(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return self.async_show_menu(step_id="source", menu_options=["source_entity", "source_fixed"])
+
+    async def async_step_source_entity(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             state = self.hass.states.get(user_input[CONF_PRICE_ENTITY])
             if state is None or not parse_prices(state.attributes.get("prices")):
                 errors["base"] = "no_prices"
             else:
-                self._data |= user_input
+                self._data = {CONF_PRICE_SOURCE: SOURCE_ENTITY} | dict(user_input)
                 return await self.async_step_init()
         schema = vol.Schema({vol.Required(CONF_PRICE_ENTITY): _PRICE_SOURCE})
         return self.async_show_form(
-            step_id="source",
+            step_id="source_entity",
             data_schema=self.add_suggested_values_to_schema(schema, self._data),
+            errors=errors,
+        )
+
+    async def async_step_source_fixed(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        schema = fixed_schema()
+        if user_input is not None:
+            errors = fixed_errors(user_input)
+            if not errors:
+                self._data = fixed_data(user_input)
+                return await self.async_step_init()
+        return self.async_show_form(
+            step_id="source_fixed",
+            data_schema=self.add_suggested_values_to_schema(vol.Schema(schema), user_input or self._data),
+            description_placeholders={"currency": self.hass.config.currency or "currency"},
             errors=errors,
         )
 
@@ -234,8 +328,7 @@ class BatteryPlannerOptionsFlow(OptionsFlow):
         if user_input is not None:
             self._options = _clear_emptied(self._options, user_input)
             return await self.async_step_init()
-        state = self.hass.states.get(self._data.get(CONF_PRICE_ENTITY, ""))
-        code = (currency_of(state.attributes.get("unit")) if state else None) or "currency"
+        code = source_currency(self.hass, self._data)
         return self.async_show_form(
             step_id="battery",
             data_schema=self.add_suggested_values_to_schema(

@@ -21,20 +21,23 @@ async def test_user_flow(hass, freezer):
     freezer.move_to(NOW)
     publish(hass, rows())
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
-    assert result["type"] is FlowResultType.FORM and result["step_id"] == "user"
+    assert result["type"] is FlowResultType.MENU and result["step_id"] == "user"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "source_entity"})
+    assert result["type"] is FlowResultType.FORM and result["step_id"] == "source_entity"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"price_entity": SOURCE})
     assert result["step_id"] == "battery"
     assert result["description_placeholders"]["currency"] == "RON"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], BATTERY)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Battery Planner (RON)"
-    assert result["data"] == {"price_entity": SOURCE}
+    assert result["data"] == {"price_source": "entity", "price_entity": SOURCE}
     assert result["options"] == {**BATTERY, "battery_usable_pct": 100.0}  # empty optional sensors are simply not stored
 
 
 async def test_battery_sensors_can_be_set_at_setup(hass):
     publish(hass, rows())
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "source_entity"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"price_entity": SOURCE})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], BATTERY | {"battery_soc_entity": "sensor.soc"}
@@ -47,6 +50,7 @@ async def test_source_without_prices_is_refused(hass, attrs):
     if attrs is not None:
         hass.states.async_set(SOURCE, "5", attrs)
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "source_entity"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"price_entity": SOURCE})
     assert result["type"] is FlowResultType.FORM and result["errors"] == {"base": "no_prices"}
 
@@ -97,7 +101,9 @@ async def test_options_are_not_saved_until_finish(hass, entry, freezer):
 
 
 async def test_changing_the_price_source(hass, entry, freezer):
-    form = await _open(hass, entry, freezer, "source")
+    menu = await _open(hass, entry, freezer, "source")
+    assert menu["type"] is FlowResultType.MENU
+    form = await hass.config_entries.options.async_configure(menu["flow_id"], {"next_step_id": "source_entity"})
     hass.states.async_set("sensor.other_prices", "1", {"unit": "EUR/kWh", "prices": rows(since="2026-11-09T12:00:00+02:00")})
     bad = await hass.config_entries.options.async_configure(form["flow_id"], {"price_entity": "sensor.empty"})
     assert bad["errors"] == {"base": "no_prices"}
