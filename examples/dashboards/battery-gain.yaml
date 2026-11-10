@@ -11,13 +11,14 @@ header:
   colorize_states: true
 graph_span: 48h
 span:
-  start: minute
+  start: day
 now:
   show: true
   label: Now
   color: "#e74c3c"
 series:
   - entity: sensor.battery_planner_plan
+    extend_to: false
     name: Earnings
     type: line
     curve: stepline
@@ -29,6 +30,7 @@ series:
     data_generator: |
       return (entity.attributes.plan || []).map(r => [new Date(r.end).getTime(), r.earnings]);
   - entity: sensor.battery_planner_plan
+    extend_to: false
     name: Expenses
     type: line
     curve: stepline
@@ -40,6 +42,7 @@ series:
     data_generator: |
       return (entity.attributes.plan || []).map(r => [new Date(r.end).getTime(), r.expenses]);
   - entity: sensor.battery_planner_plan
+    extend_to: false
     name: Net (cash)
     type: area
     curve: stepline

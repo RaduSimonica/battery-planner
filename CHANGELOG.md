@@ -7,6 +7,11 @@ version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
 [semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
 for fixes.
 
+## [0.3.0-snapshot.4] - 2026-11-10
+
+### Fixed
+- **Example cards.** Lines no longer run flat past the end of the plan (`extend_to: false`), the axis covers exactly today and tomorrow (`span: start: day`), and grid charging below 0.02 kWh (rounding dust) is not drawn as a bar. The level card has an optional series for your real battery level, so the hours that have passed show what happened. The cards need apexcharts-card 2.0 or later.
+
 ## [0.3.0-snapshot.3] - 2026-11-10
 
 ### Added
