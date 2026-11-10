@@ -13,7 +13,8 @@ TZ_OFFSET = timedelta(hours=2)  # Europe/Bucharest in November 2026 (EET)
 
 
 @pytest.fixture(autouse=True)
-async def _setup(enable_custom_integrations, hass: HomeAssistant):
+async def _setup(recorder_mock, enable_custom_integrations, hass: HomeAssistant):
+    """The recorder must exist before hass (the integration depends on it)."""
     await hass.config.async_set_time_zone("Europe/Bucharest")
 
 

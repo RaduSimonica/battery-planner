@@ -31,28 +31,39 @@ one line to add.
 ## 2. [Battery Planner] Planning modes
 
 Different people want different things from the battery, so the plan follows a
-mode chosen in the options (and changeable at any time, for example from an
-automation or a select entity):
+mode, chosen in a **select entity** (so a dashboard or an automation can switch it
+at any time):
 
-- **Max profit** (today's behaviour): only buys cheap and sells dear. The house
-  is ignored; the battery is a trading asset.
+- **Max profit** (today's behaviour, the default): only buys cheap and sells
+  dear. The house is ignored; the battery is a trading asset.
 - **Cheap self-consumption**: the battery exists to power the house at the
-  lowest cost. It charges when the buy price is low and holds the energy for
-  the hours when the house would otherwise pay the most, and it does not export
-  to the grid for profit. The value of a stored kWh is the *buy* price it
-  avoids, not the sell price.
-- **Balanced**: a bit of both. The house's needs are covered first (a reserve
-  for the expected consumption until the next cheap window), and whatever is
-  left over may be traded for profit. A slider decides how much is kept for the
-  house.
+  lowest cost. It learns when the house uses energy and charges, in the cheapest
+  intervals, enough for the next period of consumption. It does not export for
+  profit. The value of a stored kWh is the *buy* price it avoids. Open
+  question, to be settled with real data: fill the battery, or only enough to last
+  until the sun is up again.
+- **Balanced**: cover the house first, then **sell the surplus**, but only when
+  enough energy is left to last until the next sunny period. Do not buy from the
+  grid when the sun will fill the battery (summer).
 
-How it fits the planner: the three modes are the same dynamic programme with a
-different value for a kWh leaving the battery (sell price, buy price avoided, or
-a blend) and a different rule for what may be exported. They need the house
-consumption forecast of item 3, so build them together; the max profit mode
-works without it. Tests: in max profit mode nothing changes; in self-consumption
-mode nothing is exported; balanced lies between the two in energy exported and in
-gain.
+**Goals behind the modes**
+- Sunny days, maximum profit: fill the battery from the sun when the export price
+  is low, export when it is highest (early morning, late afternoon, sometimes at night).
+- No sun and high consumption (winter, heat pump, a fairly flat load over 24 h):
+  buy when it is cheap, consume when it is dear, and sell when it is dear if enough
+  is left.
+
+How it fits the planner: the modes are the same dynamic programme with a
+different value for a kWh leaving the battery and a different rule for what may be
+exported (see item 3 for the model). They need the consumption forecast and,
+for the sunny-day goals, the solar forecast, so build them together; max profit
+works without either. Tests: in max profit mode nothing changes; in
+self-consumption mode nothing is exported; balanced exports only what is above the
+energy needed until the next sun.
+
+**Reporting.** Show *earnings* (sold energy), *expenses* (bought energy) and *net
+gain* as separate sensors, for today and tomorrow, plus a `mode` attribute. More
+data is better; remove what proves noisy.
 
 ## 3. [Battery Planner] Solar and house consumption in the plan
 
@@ -93,7 +104,15 @@ sensor.
 
 **Inputs (all optional, all existing sensors the user picks):**
 - *Solar production now* (W or kW) and *house consumption now* (W or kW), used
-  for the current interval and to correct the forecast.
+  for the current interval and to correct the forecast. Consumption is read in one
+  of two ways: **one grid power sensor** that is positive and negative (with a *flip
+  the sign* option, as some meters report export as positive), or **two sensors**,
+  one for import and one for export. House consumption is then grid power plus solar
+  minus battery power.
+- The plan stays on the prices' **15-minute intervals**. Consumption is learned
+  per hour (from the recorder's hourly statistics) and spread evenly over the
+  four intervals of the hour. An **EV charger** sensor can be left out of the
+  house's consumption (done).
 - *Solar forecast*: the Home Assistant energy platform already offers one
   (Forecast.Solar, Solcast and others register as forecast providers, hourly
   Wh), so use that through the Energy dashboard's configured solar source
@@ -124,6 +143,8 @@ projected state-of-charge curve including solar and load.
   sunny forecast lowers the energy bought to charge; the energy balance (grid +
   solar = load + battery change) holds in every interval; the consumption
   profile learned from statistics matches a hand-made series.
+
+**Progress.** Slice 1 (house power from the grid, solar, battery and EV sensors, and the consumption forecast learned from the recorder's hourly statistics) is in snapshot 0.3.0-snapshot.1. Next: the cost model and the mode select (slice 2), then solar (slice 3).
 
 Build this together with the modes (item 2) and before the custom cards (item 1), so the cards can show the house reserve too.
 
