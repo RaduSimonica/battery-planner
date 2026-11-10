@@ -2,25 +2,44 @@
 
 Is it worth buying electricity when it is cheap and selling it when it is dear? Battery Planner answers that for **your** battery and **your** prices, and tells you when to charge and discharge.
 
-- **Works with any price source:** any sensor that publishes a list of buy and sell prices per interval, such as [OPCOM PZU](https://github.com/RaduSimonica/ha-opcom-pzu) for the Romanian day-ahead market.
+- **Works with any price source:** any sensor that publishes a list of buy and sell prices per interval, such as [OPCOM PZU](https://github.com/RaduSimonica/ha-opcom-pzu) for the Romanian day-ahead market, or **fixed prices** (with an optional second rate, such as a night rate) for a fixed tariff.
 - **Honest economics:** round-trip efficiency, battery degradation per kWh, capacity, and **separate charge and discharge power** (they are often different, e.g. 0.3 kW in and 1.2 kW out).
 - **Your real battery:** optionally pick your state-of-charge and capacity sensors, so today's plan starts from what is actually stored.
 - **A schedule you can use:** net gain, gain per kWh, charge/discharge windows, the action right now, and binary sensors for automations.
+
+> **Beta.** Battery Planner works, but it is young and has not seen a summer yet. Please report what you find in the [issues](https://github.com/RaduSimonica/battery-planner/issues) and attach the diagnostics file (*Settings → Devices & services → Battery Planner → three dots → Download diagnostics*).
+
+## Known limitations
+
+- **The plan advises; it does not control your inverter.** The *Action* sensor and the planned battery level are for you and your automations. An inverter in its normal mode may do something else, for example charge from surplus solar until the battery is full, even where the plan would stop earlier.
+- **Solar forecasts** are read from the Energy dashboard. Forecast.Solar was checked against real data; other providers are assumed to mark each value with the start of its period, as Home Assistant does, and have not been checked.
+- **Surplus is assumed to be curtailable** (for example by limiting the solar chargers) when it cannot be stored or sold at a positive price.
+- **The consumption forecast is an average** per hour of the day for weekdays and weekends. It does not know about the weather, or that a heat pump works harder on a cold day. The live correction helps for an hour or two.
+- **The prices decide everything.** Make sure the price source gives what you really pay and receive, including regulated tariffs, VAT and the way your supplier credits energy you send to the grid.
+- In *Max profit* mode the net result equals the net gain: that mode places no value on the energy left in the battery. Compare the modes with the *Balanced* and *Cheap self-consumption* figures.
 
 ## Install
 
 HACS → Custom repositories → add this repository as *Integration* → install → restart. Then *Settings → Devices & services → Add integration → Battery Planner*.
 
-You also need a price source. For Romania, install [OPCOM PZU](https://github.com/RaduSimonica/ha-opcom-pzu) (0.3.0 or later) and pick its *Upcoming prices* sensor when asked.
+You also need a price source. For a spot market tariff in Romania, install [OPCOM PZU](https://github.com/RaduSimonica/ha-opcom-pzu) (0.3.0 or later) and pick its *Upcoming prices* sensor when asked. With a fixed tariff you do not need another integration: choose *Fixed prices* instead.
 
 **Snapshots:** new things first appear as pre-releases (`vX.Y.Z-snapshot.N`). To try them, open the repository in HACS, menu → *Show beta versions*, then update. Stable releases are published once in a while from the snapshots that proved fine.
 
 ## Setup
 
-1. **Price source:** a sensor with a `prices` attribute (format below).
+1. **Price source:** a sensor with a `prices` attribute (format below), or fixed prices (below).
 2. **Battery:** usable capacity, maximum charge and discharge power, round-trip efficiency, degradation cost per kWh, and optionally a state-of-charge sensor (%, Wh or kWh) and a capacity sensor (Wh or kWh).
 
 Everything can be changed later under *Configure*.
+
+### Fixed prices
+
+For a fixed tariff, choose *Fixed prices* as the price source (*Configure → Price source* to switch later). Enter the **buy price** (what you pay for a kWh) and the **sell price** (what you receive for a kWh sent to the grid, 0 if you are not paid for it), per kWh in your Home Assistant currency, with taxes, network charges and VAT included, as on your bill.
+
+If your tariff has another rate at some hours, for example a night rate, add a **second rate**: the time it starts and ends (local time, it may run past midnight), its buy and sell price, and the days it applies to (every day, weekdays or weekends; the day an interval falls on decides it). More periods are on the [roadmap](ROADMAP.md).
+
+With flat prices there is nothing to buy cheap and sell dear, but the planner still helps wherever the sun and the house are concerned. In the *Balanced* and *Cheap self-consumption* modes it stores surplus solar for later when the buy price is higher than the sell price, and with a night rate it fills the battery at the cheap rate for the hours that cost more. The *Free energy* signal turns on when surplus sun would go to the grid for nothing.
 
 ### Price series format
 

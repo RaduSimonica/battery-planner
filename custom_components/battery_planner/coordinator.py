@@ -16,14 +16,17 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
-from . import settings, solar
+from . import fixed, settings, solar
 from .arbitrage import MAX_PROFIT, MODES, BatteryParams, Plan, Slot, plan
 from .const import (
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
     CONF_BATTERY_USABLE,
     CONF_PRICE_ENTITY,
+    CONF_PRICE_SOURCE,
     DOMAIN,
+    SOURCE_ENTITY,
+    SOURCE_FIXED,
 )
 from .consumption import KEEP_DAYS, POWER_UNITS, LoadProfile, hourly_kwh, house_power_kw
 from .prices import PricePoint, PriceSeries, currency_of, local_day_bounds, parse_prices
@@ -85,7 +88,13 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(hass, _LOGGER, config_entry=entry, name=DOMAIN, update_interval=None)
-        self.price_entity: str = entry.data[CONF_PRICE_ENTITY]
+        # The prices come from a sensor, or from fixed prices set up here.
+        self.price_entity: str | None = entry.data.get(CONF_PRICE_ENTITY)
+        self.fixed: fixed.FixedPrices | None = (
+            fixed.from_data(entry.data)
+            if entry.data.get(CONF_PRICE_SOURCE, SOURCE_ENTITY) == SOURCE_FIXED
+            else None
+        )
         self.battery: BatteryParams = settings.battery(entry.options)
         self.data = PlanData()
         self._series = PriceSeries()
@@ -136,9 +145,10 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             self.config_entry.async_create_background_task(
                 self.hass, self._learn(), f"{DOMAIN} learn consumption"
             )
-        self.config_entry.async_on_unload(
-            async_track_state_change_event(self.hass, [self.price_entity], self._source_changed)
-        )
+        if self.price_entity and not self.fixed:
+            self.config_entry.async_on_unload(
+                async_track_state_change_event(self.hass, [self.price_entity], self._source_changed)
+            )
         sensors = [
             e for e in (
                 self.config_entry.options.get(CONF_BATTERY_SOC_ENTITY),
@@ -323,7 +333,15 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
 
     def _read_source(self) -> None:
         """Latest prices from the source. An unavailable source keeps the last good ones."""
-        state = self.hass.states.get(self.price_entity)
+        if self.fixed:
+            tz = dt_util.get_default_time_zone()
+            today = dt_util.now().date()
+            start = local_day_bounds(today, tz)[0]
+            end = local_day_bounds(today + timedelta(days=1), tz)[1]
+            self._series = PriceSeries(fixed.points(self.fixed, start, end, tz))
+            self._unit = f"{self.hass.config.currency}/kWh"
+            return
+        state = self.hass.states.get(self.price_entity or "")
         if state is None:
             _LOGGER.debug("Price source %s does not exist (yet)", self.price_entity)
             return

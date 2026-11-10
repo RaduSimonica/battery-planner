@@ -1,165 +1,110 @@
 # Roadmap
 
-Planned improvements, not implemented yet. Each ships as a version of its own
-(see [CONTRIBUTING.md](CONTRIBUTING.md)). Prices come from other integrations
-through the [price series contract](https://github.com/RaduSimonica/ha-opcom-pzu/blob/main/docs/price-series.md);
+What comes next. Each item ships as a version of its own (see
+[CONTRIBUTING.md](CONTRIBUTING.md)). Prices come from other integrations through
+the [price series contract](https://github.com/RaduSimonica/ha-opcom-pzu/blob/main/docs/price-series.md);
 the OPCOM PZU roadmap is in its own repository.
 
-## 1. [Battery Planner, price card in OPCOM PZU] Custom dashboard card(s)
+## Shipped
 
-apexcharts-card works but is not the nicest to look at, and each example needs
-a long block of YAML. A card made for this integration would look better and be
-one line to add.
+- **0.1 – 0.2:** the planner, battery options, energy and state-of-charge sensors, countdown timers, usable share.
+- **0.3.0 (beta):** house consumption learned from the recorder, the three planning modes
+  (max profit, cheap self-consumption, balanced), solar from the Energy dashboard's
+  forecasts, earnings, expenses and net result, the *Plan* sensor and example cards, the
+  *Free energy* signal, a plan that follows the house and the sun, diagnostics.
 
-- **Battery card**: a battery shape showing the current level (from the SoC
-  sensor) and the projected level at the end of the day, with what the plan does
-  now (charging, exporting, idle), the energy to charge and export (the energy sensors) and
-  the next change. Colours follow the theme.
-- **Price card**: the merged price chart of OPCOM PZU (spot, buy, sell, now
-  marker, cheap and expensive windows shaded, the planned charge and discharge
-  windows marked), instead of an apexcharts configuration.
-- Delivery: a single JavaScript file in the repository, registered as a
-  dashboard resource by the integration so HACS users do not add it by hand
-  (or documented as one step if that is not possible). Cards take the entity
-  from their configuration and read the existing attributes, so no new backend
-  work is needed beyond the energy and state-of-charge sensors. Needs a visual editor for the card
-  options, a preview in the card picker, and light and dark theme checks.
-- Decide first whether it is one card with options or two, and whether to build
-  on Lit (as Home Assistant does) or plain web components. Keep the apexcharts
-  examples as the fallback.
+## 1. Fixed and time-of-use prices (first version in snapshot 0.4.0-snapshot.1)
 
-## 2. [Battery Planner] Planning modes
+Today the price source is a sensor that follows the price series contract. Add a
+second kind of source for users without a spot price:
 
-Different people want different things from the battery, so the plan follows a
-mode, chosen in a **select entity** (so a dashboard or an automation can switch it
-at any time):
+- **Fixed prices:** one buy price and one sell price (taxes and VAT included, per kWh).
+- **A second rate** that applies during certain hours (a night rate, for example), every
+  day, on weekdays or at weekends. Done. To do: more periods (a weekend rate and a night rate
+  together, a peak rate), and public holidays as weekends.
+- With flat prices there is nothing to trade, but the planner still stores the sun
+  instead of exporting it when the buy price is above the sell price, and the
+  *Free energy* signal works when exports earn nothing.
 
-- **Max profit** (today's behaviour, the default): only buys cheap and sells
-  dear. The house is ignored; the battery is a trading asset.
-- **Cheap self-consumption**: the battery exists to power the house at the
-  lowest cost. It learns when the house uses energy and charges, in the cheapest
-  intervals, enough for the next period of consumption. It does not export for
-  profit. The value of a stored kWh is the *buy* price it avoids. Open
-  question, to be settled with real data: fill the battery, or only enough to last
-  until the sun is up again.
-- **Balanced**: cover the house first, then **sell the surplus**, but only when
-  enough energy is left to last until the next sunny period. Do not buy from the
-  grid when the sun will fill the battery (summer).
+## 2. Custom dashboard cards
 
-**Goals behind the modes**
-- Sunny days, maximum profit: fill the battery from the sun when the export price
-  is low, export when it is highest (early morning, late afternoon, sometimes at night).
-- No sun and high consumption (winter, heat pump, a fairly flat load over 24 h):
-  buy when it is cheap, consume when it is dear, and sell when it is dear if enough
-  is left.
+apexcharts-card works but is not the nicest to look at, and each example needs a long
+block of YAML. A card made for this integration would look better and be one line to add.
 
-How it fits the planner: the modes are the same dynamic programme with a
-different value for a kWh leaving the battery and a different rule for what may be
-exported (see item 3 for the model). They need the consumption forecast and,
-for the sunny-day goals, the solar forecast, so build them together; max profit
-works without either. Tests: in max profit mode nothing changes; in
-self-consumption mode nothing is exported; balanced exports only what is above the
-energy needed until the next sun.
+- **Battery card:** a battery shape with the current and the planned level, what the plan
+  does now (charging, exporting, idle), the energy to charge and export, and the next change.
+  Colours follow the theme.
+- **Plan chart:** prices, the planned charge and discharge, the level, house use and solar,
+  with a hover per interval and the real battery level for the hours that have passed.
+- **Price card** (in OPCOM PZU): spot, buy and sell price, a now marker, the cheap and
+  expensive windows shaded and the planned windows marked.
+- Delivery: a single JavaScript file in the repository, registered as a dashboard resource
+  by the integration so HACS users do not add it by hand (or documented as one step if that
+  is not possible). Cards read the *Plan* sensor, so no new backend work is needed. A visual
+  editor for the options, a preview in the card picker, and light and dark theme checks.
+- Decide first whether it is one card with options or two, and whether to build on Lit (as
+  Home Assistant does) or plain web components. Keep the apexcharts examples as the fallback.
 
-**Reporting.** Show *earnings* (sold energy), *expenses* (bought energy) and *net
-gain* as separate sensors, for today and tomorrow, plus a `mode` attribute. More
-data is better; remove what proves noisy.
+## 3. Battery limits: reserve and trade share
 
-## 3. [Battery Planner] Solar and house consumption in the plan
+Today one setting, *Share of the battery to use*, keeps a reserve at the bottom that is
+never sold. Split the battery into three parts instead:
 
-Take the user's solar production, consumption and solar forecast into account,
-so the planner knows how much of the battery can really be sold, and does not
-sell energy the house will need later and buy back at a higher price.
+- **Reserve:** never touched (backup power, the inverter's own minimum).
+- **Trade share:** a percentage of the battery used **only for trading**: buy when it is
+  cheap, sell when it is dear, whatever the house needs.
+- **House share:** the rest, minus the reserve, used **only for the house**
+  (self-consumption, storing the sun), never sold for arbitrage.
 
-**What this is for.** Most users of a battery also have solar panels. The
-planner should charge the battery from the solar surplus and **avoid exporting
-to the grid when the price is low**, store that energy, and sell it later when the
-price is higher (or use it in the house when buying would cost more). Surplus
-solar costs nothing to store, so it is the cheapest energy the battery can get.
-Grid charging then only fills what solar will not.
+For example 15 kWh with a 20% reserve and a 30% trade share: 3 kWh reserve, 4.5 kWh for
+trading, 7.5 kWh for the house.
 
-**Why the current planner is not enough.** It values every kWh at the market:
-buy to charge, sell to discharge. With solar and a house load, energy that
-leaves the battery to power the house is worth the *buy* price it avoids, not
-the sell price, and surplus solar is free energy to store. The battery's use for
-arbitrage is whatever is left after the house's needs, and that depends on the
-forecast.
+Open questions, to be settled when we build it:
+- **Integration with the plan.** Two separate energy levels make the state space of the
+  planner two-dimensional, which is too big at today's resolution. A likely way is two coupled
+  plans (one per share) that share the charge and discharge power limits, the export cap and
+  the solar surplus, solved one after the other with the house share first.
+- **Who gets the solar surplus.** House share first, then trade share, or the other way round.
+- **Reading the real level.** The state-of-charge sensor gives only the total. The split
+  would be an accounting the planner keeps itself, restored after a restart.
+- **Interplay with the modes.** In *Max profit* only the trade share matters; the house modes
+  use the house share and, for exports, the trade share.
+- **Settings.** Percentages of the usable capacity, with the current *Share of the battery to
+  use* becoming the reserve (migrating existing settings without a change in behaviour).
 
-**Model.** For each interval, the house needs `net = consumption - solar`
-(negative = surplus). The grid exchange is `net` plus charging minus
-discharging (battery power limits unchanged). Importing costs the buy price,
-exporting earns the sell price. The planner minimises the total cost over the
-horizon with the same dynamic programme (the per-interval cost is just
-piecewise linear), and the *gain* is the cost without the battery minus the
-cost with it. Nothing else changes: degradation per kWh discharged,
-efficiency, separate charge and discharge power, start level from the SoC
-sensor.
+## 4. Applying the plan to the inverter
 
-- Arbitrage then happens only when it beats using the energy at home, and the
-  "reserve for the house" is an outcome, not a setting. The usable share
-  stays as a manual floor on top of it.
-- Tomorrow's plan can start from today's *projected* end-of-day level instead of
-  an empty battery (the projected state of charge sensors provide it), which is a better assumption once
-  solar and load are known.
+The plan only advises: the *Action* sensor and the planned level are for you and your
+automations, and an inverter in its normal mode may do something else (charge from surplus
+solar until full, for example). Offer a way to follow the plan: ready-made automations or
+blueprints first (for example for Victron ESS settings), then optionally a service that sets
+the grid setpoint or the charge and discharge limits for the current interval.
 
-**Inputs (all optional, all existing sensors the user picks):**
-- *Solar production now* (W or kW) and *house consumption now* (W or kW), used
-  for the current interval and to correct the forecast. Consumption is read in one
-  of two ways: **one grid power sensor** that is positive and negative (with a *flip
-  the sign* option, as some meters report export as positive), or **two sensors**,
-  one for import and one for export. House consumption is then grid power plus solar
-  minus battery power.
-- The plan stays on the prices' **15-minute intervals**. Consumption is learned
-  per hour (from the recorder's hourly statistics) and spread evenly over the
-  four intervals of the hour. An **EV charger** sensor can be left out of the
-  house's consumption (done).
-- *Solar forecast*: the Home Assistant energy platform already offers one
-  (Forecast.Solar, Solcast and others register as forecast providers, hourly
-  Wh), so use that through the Energy dashboard's configured solar source
-  rather than asking for a sensor; fall back to a sensor with a forecast
-  attribute.
-- *Consumption forecast*: there is no ready one, so learn it from the
-  consumption sensor's own long-term statistics: the average per time of day
-  over the last weeks, separately for weekdays and weekends. Until enough
-  history exists, use a flat value from the last 24 hours.
-- Without any of these the planner behaves exactly as today.
+## 5. Better reporting
 
-**New sensors:** expected self-consumption (share of the house load covered by
-solar and battery), grid import avoided, energy the battery can export for
-arbitrage ("usable for arbitrage", kWh), energy kept as house reserve, and the
-projected state-of-charge curve including solar and load.
+- **Split *Expenses*** into real purchases and **forgone exports** (the revenue given up
+  when the sun is stored), so the figure does not look like money spent.
+- **Max profit's net result** is not comparable with the house modes, because that mode
+  places no value on the energy left in the battery. Value it for reporting only.
+- **Plan against reality:** record what the battery really did and compare it with the plan.
+- Sensors the first design listed and we did not build: expected self-consumption, grid import
+  avoided, energy usable for arbitrage, and energy kept as house reserve.
 
-**Care needed:**
-- Forecasts are wrong. Show the assumptions in attributes, re-plan every 15
-  minutes with the real readings (already done for the SoC), and consider a
-  safety margin option on the forecast (e.g. use 80% of it).
-- Zero-export or export-limited installations: an option for the maximum export
-  power; surplus beyond it is curtailed or must be stored.
-- Negative prices: exporting at a negative price should be avoided (store or
-  curtail), which the cost model handles once the export power limit exists.
-- Units and clamping for every picked sensor, as done for the SoC and capacity.
-- Tests: with no solar and no load the result equals today's plan; the gain is
-  never below zero; a night-time load reduces the energy planned for export; a
-  sunny forecast lowers the energy bought to charge; the energy balance (grid +
-  solar = load + battery change) holds in every interval; the consumption
-  profile learned from statistics matches a hand-made series.
+## 6. Forecasts
 
-**Progress.** Slice 1 (house power from the grid, solar, battery and EV sensors, and the consumption forecast learned from the recorder's hourly statistics) is in snapshot 0.3.0-snapshot.1. Slice 2 (the cost model with the house, the mode select, earnings and expenses) is in snapshot 0.3.0-snapshot.2. Next: solar (slice 3).
+- **Consumption:** today an average per hour for weekdays and weekends. Learn from the
+  temperature (a heat pump works harder in the cold) or from a weather forecast.
+- **Solar:** a fallback for forecast providers that are not on the Energy dashboard (a sensor
+  with a forecast attribute), a safety margin option (use 80% of the forecast), a per-array
+  view, and checking providers other than Forecast.Solar against real data.
+- An option for systems that cannot curtail surplus solar.
 
-The *Plan* sensor now carries everything per interval (see the README), so the cards of item 1 need no new backend work.
+## 7. More price sources
 
-**Progress.** Slice 3 is in snapshot 0.3.0-snapshot.3: the forecast comes from the Energy dashboard (all providers, added up), several production sensors are summed, negative prices and the export limit are handled. Still to do: tuning against real days, the sensor-attribute fallback for forecast providers that are not in the Energy dashboard, and a per-array view.
+- **Adapters** for popular sources that use another attribute layout (for example Nord Pool's
+  `raw_today` / `raw_tomorrow`), with a tariff step (formula or simple fields) for sources that
+  only give the spot price.
 
-Build this together with the modes (item 2) and before the custom cards (item 1), so the cards can show the house reserve too.
+## 8. Later
 
-## Price sources besides an entity
-
-Today the price source is a sensor that follows the contract. Add:
-
-- **Fixed prices:** one buy and one sell price, or a time-of-use schedule
-  (periods with their own prices), for users without a spot-price source. It
-  matters most together with item 3 (solar and consumption), where the value of
-  stored energy is the buy price avoided.
-- **Adapters** for popular sources that use another attribute layout (for
-  example Nord Pool's `raw_today` / `raw_tomorrow`), with a tariff step (formula
-  or simple fields) for sources that only give the spot price.
+- **1.0.0** when the price series contract and the options have stayed stable for a while.

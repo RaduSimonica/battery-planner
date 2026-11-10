@@ -1,0 +1,11 @@
+name: Feature request
+description: An idea or something missing
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like, and why?
+      description: Your setup helps (battery, inverter, tariff, solar).
+    validations:
+      required: true

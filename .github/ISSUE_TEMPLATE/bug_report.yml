@@ -1,0 +1,58 @@
+name: Bug report
+description: Something does not work, or the plan looks wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing. This integration is in beta, so reports are very welcome.
+        Please attach the **diagnostics file**: *Settings → Devices & services → Battery Planner → three dots → Download diagnostics*. It holds the settings, the assumptions of each plan and a summary of the prices, the consumption forecast and the solar forecast. It has no passwords.
+  - type: input
+    id: version
+    attributes:
+      label: Integration version
+      description: Shown in HACS, e.g. 0.3.0
+    validations:
+      required: true
+  - type: input
+    id: ha
+    attributes:
+      label: Home Assistant version
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Planning mode
+      options: [Max profit, Cheap self-consumption, Balanced]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: For a plan that looks wrong, say which interval or sensor, and what you thought it should do.
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup
+      description: Price source, inverter or battery brand, solar forecast provider (Forecast.Solar, Solcast, ...), and whether you picked house, grid, solar, battery or EV sensors.
+  - type: textarea
+    id: plan
+    attributes:
+      label: The plan sensor
+      description: For a plan problem, Developer tools → States → `sensor.battery_planner_plan`, then copy the attributes (it is long; the diagnostics file is enough for most reports).
+      render: yaml
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines
+      description: Settings → System → Logs, search for `battery_planner`. Paste them here.
+      render: text
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics file
+      description: Drag the downloaded file here.

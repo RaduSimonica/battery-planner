@@ -4,6 +4,23 @@ DOMAIN = "battery_planner"
 NAME = "Battery Planner"
 
 CONF_PRICE_ENTITY = "price_entity"  # a sensor that follows the price series contract
+CONF_PRICE_SOURCE = "price_source"  # "entity" (a price sensor, the default) or "fixed"
+SOURCE_ENTITY = "entity"
+SOURCE_FIXED = "fixed"
+
+# Fixed prices (part of the entry's data): a buy and a sell price per kWh, taxes and VAT
+# included, and an optional second rate for some hours (a night rate, for example).
+CONF_FIXED_BUY = "fixed_buy_price"
+CONF_FIXED_SELL = "fixed_sell_price"
+CONF_RATE2_FROM = "rate2_from"
+CONF_RATE2_TO = "rate2_to"
+CONF_RATE2_BUY = "rate2_buy_price"
+CONF_RATE2_SELL = "rate2_sell_price"
+CONF_RATE2_DAYS = "rate2_days"
+FIXED_KEYS = (
+    CONF_FIXED_BUY, CONF_FIXED_SELL, CONF_RATE2_FROM, CONF_RATE2_TO,
+    CONF_RATE2_BUY, CONF_RATE2_SELL, CONF_RATE2_DAYS,
+)
 
 # Battery (options)
 CONF_BATTERY_CAPACITY = "battery_capacity_kwh"

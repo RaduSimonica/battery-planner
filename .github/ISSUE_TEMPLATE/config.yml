@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: OPCOM PZU (Romanian prices)
+    url: https://github.com/RaduSimonica/ha-opcom-pzu/issues
+    about: Questions about the prices, supplier plans and formulas belong in the OPCOM PZU repository.
