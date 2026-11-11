@@ -2,7 +2,7 @@
 # and the house's expected use. The line is the level at the end of each
 # interval if the plan is followed (today starts from your real level, tomorrow
 # from where today ends). Bars are kWh on the right axis: green = bought from
-# the grid, purple = delivered by the battery (to the house or the grid). The
+# the grid, purple = delivered to the house, pink = exported to the grid. The
 # grey line is the house's expected use per interval and the yellow line the solar
 # production the plan expects. It follows the plan as it
 # is redone, so an oven or a washing machine shows up within minutes.
@@ -64,7 +64,7 @@ series:
         .map(r => [new Date(r.start).getTime(), r.charge_kwh]);
   - entity: sensor.battery_planner_plan
     extend_to: false
-    name: Delivered by the battery
+    name: Battery to the house
     yaxis_id: kwh
     type: column
     color: "#9b59b6"
@@ -73,8 +73,21 @@ series:
       in_header: false
     data_generator: |
       return (entity.attributes.plan || [])
-        .filter(r => r.discharge_kwh > 0)
-        .map(r => [new Date(r.start).getTime(), r.discharge_kwh]);
+        .filter(r => r.to_house_kwh > 0.02)
+        .map(r => [new Date(r.start).getTime(), r.to_house_kwh]);
+  - entity: sensor.battery_planner_plan
+    extend_to: false
+    name: Exported by the battery
+    yaxis_id: kwh
+    type: column
+    color: "#e84393"
+    float_precision: 2
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || [])
+        .filter(r => r.export_kwh > 0.02)
+        .map(r => [new Date(r.start).getTime(), r.export_kwh]);
   - entity: sensor.battery_planner_plan
     extend_to: false
     name: House use (expected)
