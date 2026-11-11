@@ -1,7 +1,7 @@
 # What the battery is planned to do, interval by interval, over your buy and
-# sell prices. Bars show the price paid (charge) or the value per kWh
-# (discharge: the buy price avoided when it covers the house, the sell price
-# when it is exported) in each planned interval. Covers the rest of today and
+# sell prices. Bars show the price paid (charge), the buy price avoided when the
+# battery covers the house (purple), and the sell price when it exports to the
+# grid (pink) in each planned interval. Covers the rest of today and
 # tomorrow once published, and follows the plan as it is redone. Needs
 # apexcharts-card (HACS -> Frontend).
 # If the plan is empty, the planner found nothing worth doing for your
@@ -73,7 +73,7 @@ series:
         .map(r => [new Date(r.start).getTime(), r.sell]);
   - entity: sensor.battery_planner_plan
     extend_to: false
-    name: Discharge
+    name: Battery to the house
     type: column
     color: "#9b59b6"
     float_precision: 4
@@ -81,5 +81,17 @@ series:
       in_header: false
     data_generator: |
       return (entity.attributes.plan || [])
-        .filter(r => r.action === 'discharge')
-        .map(r => [new Date(r.start).getTime(), (r.to_house_kwh * r.buy + r.export_kwh * r.sell) / r.discharge_kwh]);
+        .filter(r => r.to_house_kwh > 0.02)  // ignore rounding dust
+        .map(r => [new Date(r.start).getTime(), r.buy]);
+  - entity: sensor.battery_planner_plan
+    extend_to: false
+    name: Export to the grid
+    type: column
+    color: "#e84393"
+    float_precision: 4
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || [])
+        .filter(r => r.export_kwh > 0.02)
+        .map(r => [new Date(r.start).getTime(), r.sell]);

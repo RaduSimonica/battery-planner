@@ -7,6 +7,12 @@ version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
 [semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
 for fixes.
 
+## [0.4.0-snapshot.3] - 2026-11-11
+
+### Fixed
+- **The dashboard cards show what the battery does with its energy.** *Battery plan* and *Battery level and energy* drew every discharge as one purple bar, so a battery that only covers the house looked as if it was selling. They now show *Battery to the house* (purple) and *Export to the grid* (pink) separately. Update the cards from `examples/dashboards/`.
+- **Balanced no longer sells rounding noise.** With a small house load the planner tracked the battery in steps larger than what the house uses in an interval, so a discharge overshot the load and the excess was exported in a little piece in nearly every interval. The step is now finer.
+
 ## [0.4.0-snapshot.2] - 2026-11-11
 
 ### Added

@@ -148,3 +148,16 @@ def test_running_totals_follow_the_plan():
     assert p.net_curve[-1] == pytest.approx(p.net_gain)
     assert all(b >= a - 1e-9 for a, b in zip(p.earnings_curve, p.earnings_curve[1:]))  # only grows
     assert all(b >= a - 1e-9 for a, b in zip(p.expenses_curve, p.expenses_curve[1:]))
+
+
+def test_balanced_does_not_sell_rounding_noise():
+    """A small house load must not turn every discharge into a bit of export."""
+    slots = [
+        Slot(T0 + timedelta(minutes=15 * i), 3.2 + (i % 5) * 0.1, (3.2 + (i % 5) * 0.1) * 0.68, load_kwh=0.069)
+        for i in range(144)
+    ]
+    battery = BatteryParams(7.65, 3.5, 3.5, 0.9, 0.15)
+    p = plan(slots, 0.25, battery, 5.3, mode=BALANCED, terminal_value=2.2)
+    out = sum(s.grid_kwh for s in p.slots if s.action == "discharge")
+    assert p.energy_sold_kwh < 0.1 * out
+    assert max(s.grid_kwh for s in p.slots if s.action == "discharge") < 0.069 * 1.2

@@ -153,10 +153,11 @@ def plan(
     capacity = min(params.capacity_kwh, n * charge_cap + initial_kwh)
     step = min(charge_cap, discharge_cap, capacity / 10) / 2
     if house:
-        # The grain must be finer than what the house uses in a slot, or a battery
+        # The grain must be finer than what the house uses in a slot (a quarter of it, so a
+        # discharge hardly overshoots the load and is not sold as noise), or a battery
         # that only covers the house could never discharge in a single step.
         mean_load = sum(s.load_kwh for s in slots) / n
-        step = min(step, max(mean_load / 2, capacity / MAX_SOC_UNITS))
+        step = min(step, max(mean_load / 4, capacity / MAX_SOC_UNITS))
     capacity = min(capacity, MAX_SOC_UNITS * step)
     units = int(capacity / step + 1e-9)
     if units < 1:
