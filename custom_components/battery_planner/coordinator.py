@@ -17,7 +17,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from . import fixed, settings, solar
-from .arbitrage import MAX_PROFIT, MODES, BatteryParams, Plan, Slot, plan
+from .arbitrage import MAX_PROFIT, MODES, BatteryParams, Plan, Slot, percentile, plan
 from .const import (
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
@@ -106,6 +106,7 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
             else None
         )
         self.battery: BatteryParams = settings.battery(entry.options)
+        self.sell_percentile, self.buy_percentile = settings.trade_percentiles(entry.options)
         self.data = PlanData()
         self._series = PriceSeries()
         self._unit: str | None = None
@@ -506,6 +507,7 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
         today = dt_util.now().date()
         for offset in (0, 1):
             start, end = local_day_bounds(today + timedelta(days=offset), tz)
+            whole_day = series.window(start, end)  # the percentiles are of the whole day
             if offset == 0:
                 start = max(start, now)  # past intervals are not part of the plan
             points = series.window(start, end)
@@ -560,7 +562,17 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
                 start_energy, origin = plans[0].soc[-1], "end of today's plan"
             else:
                 start_energy, origin = battery.reserve_kwh, "assumed empty"
-            plans[offset] = plan(slots, hours, battery.params, start_energy, used_mode, terminal)
+            min_export = (
+                percentile([p.sell for p in whole_day], self.sell_percentile)
+                if self.sell_percentile is not None else None
+            )
+            max_charge = (
+                percentile([p.buy for p in whole_day], self.buy_percentile)
+                if self.buy_percentile is not None else None
+            )
+            plans[offset] = plan(
+                slots, hours, battery.params, start_energy, used_mode, terminal, min_export, max_charge
+            )
             covered[offset] = points
             expected[offset] = loads or [0.0] * len(points)
             sun[offset] = production
@@ -573,6 +585,10 @@ class PlannerCoordinator(DataUpdateCoordinator[PlanData]):
                 "starting_energy": origin,
                 "mode": used_mode,
             }
+            if min_export is not None:
+                info[offset]["export_only_above"] = round(min_export, 4)
+            if max_charge is not None:
+                info[offset]["grid_charge_only_below"] = round(max_charge, 4)
             if note:
                 info[offset]["mode_note"] = note
             if loads:

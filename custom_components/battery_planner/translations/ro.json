@@ -20,7 +20,9 @@
           "battery_degradation_per_kwh": "Cost de degradare per kWh",
           "battery_soc_entity": "Senzor nivel de încărcare (opțional)",
           "battery_capacity_entity": "Senzor capacitate (opțional)",
-          "battery_usable_pct": "Procent din baterie folosit"
+          "battery_usable_pct": "Procent din baterie folosit",
+          "sell_percentile": "Vinde doar peste acest percentil al zilei (optional)",
+          "buy_percentile": "Cumpara doar sub acest percentil al zilei (optional)"
         },
         "data_description": {
           "battery_charge_power_kw": "Cea mai mare putere pe care bateria o poate prelua din rețea, în kW, la nivelul rețelei. 300 W = 0,3 kW.",
@@ -29,7 +31,9 @@
           "battery_degradation_per_kwh": "Uzura bateriei per kWh livrat, în {currency}. Aproximativ prețul bateriei per kWh ÷ cicluri de viață (ex. 1500 ÷ 6000 = 0,25).",
           "battery_soc_entity": "Procent, Wh sau kWh. Folosit pentru planul de azi.",
           "battery_capacity_entity": "Capacitate utilizabilă în Wh sau kWh. Înlocuiește capacitatea fixă.",
-          "battery_usable_pct": "Planificatorul lucrează doar cu acest procent din capacitate. Restul este o rezervă la baza bateriei care nu se vinde niciodată (curent de rezervă, consumul tău). 50% dintr-o baterie de 10 kWh înseamnă 5 kWh de planificat și 5 kWh păstrați."
+          "battery_usable_pct": "Planificatorul lucrează doar cu acest procent din capacitate. Restul este o rezervă la baza bateriei care nu se vinde niciodată (curent de rezervă, consumul tău). 50% dintr-o baterie de 10 kWh înseamnă 5 kWh de planificat și 5 kWh păstrați.",
+          "sell_percentile": "Bateria exporta in retea doar in intervalele cu pretul de vanzare cel putin egal cu acest percentil al preturilor de vanzare din zi. 95 inseamna doar cele mai scumpe 5% din zi. Lasa gol ca planul sa decida. Alimentarea casei si stocarea energiei solare nu sunt limitate niciodata.",
+          "buy_percentile": "Bateria se incarca din retea doar in intervalele cu pretul de cumparare cel mult egal cu acest percentil al preturilor de cumparare din zi. 5 inseamna doar cele mai ieftine 5% din zi. Lasa gol ca planul sa decida. Stocarea energiei solare nu este limitata niciodata."
         }
       },
       "source_entity": {
@@ -104,7 +108,9 @@
           "battery_degradation_per_kwh": "Cost de degradare per kWh",
           "battery_soc_entity": "Senzor nivel de încărcare (opțional)",
           "battery_capacity_entity": "Senzor capacitate (opțional)",
-          "battery_usable_pct": "Procent din baterie folosit"
+          "battery_usable_pct": "Procent din baterie folosit",
+          "sell_percentile": "Vinde doar peste acest percentil al zilei (optional)",
+          "buy_percentile": "Cumpara doar sub acest percentil al zilei (optional)"
         },
         "data_description": {
           "battery_charge_power_kw": "Cea mai mare putere pe care bateria o poate prelua din rețea, în kW, la nivelul rețelei. 300 W = 0,3 kW.",
@@ -113,7 +119,9 @@
           "battery_degradation_per_kwh": "Uzura bateriei per kWh livrat, în {currency}. Aproximativ prețul bateriei per kWh ÷ cicluri de viață (ex. 1500 ÷ 6000 = 0,25).",
           "battery_soc_entity": "Procent, Wh sau kWh. Folosit pentru planul de azi.",
           "battery_capacity_entity": "Capacitate utilizabilă în Wh sau kWh. Înlocuiește capacitatea fixă.",
-          "battery_usable_pct": "Planificatorul lucrează doar cu acest procent din capacitate. Restul este o rezervă la baza bateriei care nu se vinde niciodată (curent de rezervă, consumul tău). 50% dintr-o baterie de 10 kWh înseamnă 5 kWh de planificat și 5 kWh păstrați."
+          "battery_usable_pct": "Planificatorul lucrează doar cu acest procent din capacitate. Restul este o rezervă la baza bateriei care nu se vinde niciodată (curent de rezervă, consumul tău). 50% dintr-o baterie de 10 kWh înseamnă 5 kWh de planificat și 5 kWh păstrați.",
+          "sell_percentile": "Bateria exporta in retea doar in intervalele cu pretul de vanzare cel putin egal cu acest percentil al preturilor de vanzare din zi. 95 inseamna doar cele mai scumpe 5% din zi. Lasa gol ca planul sa decida. Alimentarea casei si stocarea energiei solare nu sunt limitate niciodata.",
+          "buy_percentile": "Bateria se incarca din retea doar in intervalele cu pretul de cumparare cel mult egal cu acest percentil al preturilor de cumparare din zi. 5 inseamna doar cele mai ieftine 5% din zi. Lasa gol ca planul sa decida. Stocarea energiei solare nu este limitata niciodata."
         }
       },
       "general": {

@@ -31,7 +31,9 @@ from .const import (
     CONF_BATTERY_POWER_FLIP,
     CONF_BATTERY_SOC_ENTITY,
     CONF_BATTERY_USABLE,
+    CONF_BUY_PERCENTILE,
     CONF_EV_BATTERY_KW,
+    CONF_SELL_PERCENTILE,
     CONF_EV_MAX_KW,
     CONF_EV_POWER_ENTITY,
     CONF_EV_START_KW,
@@ -63,7 +65,7 @@ from .prices import currency_of, parse_prices
 _PRICE_SOURCE = EntitySelector(EntitySelectorConfig(domain="sensor"))
 _SENSOR = EntitySelector(EntitySelectorConfig(domain=["sensor", "number", "input_number"]))
 _SENSORS = EntitySelector(EntitySelectorConfig(domain=["sensor", "number", "input_number"], multiple=True))
-OPTIONAL_ENTITIES = (CONF_BATTERY_SOC_ENTITY, CONF_BATTERY_CAPACITY_ENTITY)
+OPTIONAL_ENTITIES = (CONF_BATTERY_SOC_ENTITY, CONF_BATTERY_CAPACITY_ENTITY, CONF_SELL_PERCENTILE, CONF_BUY_PERCENTILE)
 
 
 def _num(minimum: float, maximum: float, step: float, unit: str | None = None) -> NumberSelector:
@@ -83,6 +85,8 @@ def battery_schema() -> dict:
         vol.Required(CONF_BATTERY_USABLE, default=100): _num(1, 100, 1, "%"),
         vol.Optional(CONF_BATTERY_SOC_ENTITY): _SENSOR,
         vol.Optional(CONF_BATTERY_CAPACITY_ENTITY): _SENSOR,
+        vol.Optional(CONF_SELL_PERCENTILE): _num(0, 100, 1, "%"),
+        vol.Optional(CONF_BUY_PERCENTILE): _num(0, 100, 1, "%"),
     }
 
 

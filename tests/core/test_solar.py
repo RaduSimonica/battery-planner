@@ -144,3 +144,12 @@ def test_without_a_battery_plan_the_flows_show_the_house_alone():
     p = run(battery=BatteryParams(10, 5, 5, 0.9, 0.1), slots=[Slot(T0 + timedelta(minutes=15 * i), 1.0, 1.0, load_kwh=0.2, solar_kwh=0.0) for i in range(8)])
     assert not p.profitable and len(p.flows) == 8
     assert all(f.grid_import_kwh == pytest.approx(0.2) for f in p.flows)
+
+
+def test_storing_the_sun_is_a_forgone_export_not_a_purchase():
+    """The money the sun would have earned counts as given up, and is reported apart from purchases."""
+    p = run()
+    assert p.energy_from_solar_kwh > 5.0 and p.energy_bought_kwh < 1.0
+    assert p.forgone_exports > 0
+    assert p.forgone_exports <= p.expenses + 1e-9
+    assert p.expenses - p.forgone_exports < 0.2 * p.expenses + 1.0  # nearly all of it is exports given up

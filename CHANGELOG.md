@@ -7,6 +7,15 @@ version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
 [semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
 for fixes.
 
+## [0.4.0-snapshot.4] - 2026-11-11
+
+### Added
+- **Trade only at the extremes of the day.** Two optional battery settings, *Sell only above this percentile of the day* and *Buy only below this percentile of the day*. With 95 for selling the battery exports only in the dearest 5% of the day's sell prices; with 5 for buying it charges from the grid only in the cheapest 5% of the buy prices. Each is worked out per day from the whole day's prices, applies in every mode, and leaves the house and the sun alone (covering the house and storing the sun are never limited). Empty means the plan decides, as before. The net gain sensors show the resulting `export_only_above` and `grid_charge_only_below` prices.
+
+### Fixed
+- **The *Action* no longer flips to idle in the middle of an interval.** A plan redone late in an interval has only a little of the house's load left, sometimes less than one step of the battery's grid, and then a battery that only covers the house could not discharge, so the action went *idle* until the next interval (*discharge* at :00, :15, :30, :45 and *idle* in between). The remaining load is now rounded up to one step.
+- **Expenses no longer look like purchases.** When the plan stores the sun instead of selling it, the money you would have been paid counted as *Expenses*, so the net line dipped while the battery charged from the sun. The *Net gain* sensors and the *Plan* rows now also report `forgone_exports`, the part of the expenses that is only exports given up, and the *Planned earnings and expenses* card draws it as a dashed line. The totals are unchanged.
+
 ## [0.4.0-snapshot.3] - 2026-11-11
 
 ### Fixed

@@ -37,7 +37,7 @@ Importing at a negative buy price pays, so the plan charges from the grid then.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from math import sqrt
 
@@ -94,7 +94,8 @@ class Plan:
     profitable: bool = False
     net_gain: float = 0.0  # earnings - expenses - degradation, against not using the battery
     earnings: float = 0.0  # money received for exports, plus purchases avoided at home
-    expenses: float = 0.0  # money spent buying energy for the battery
+    expenses: float = 0.0  # money spent buying energy, plus exports given up (see forgone_exports)
+    forgone_exports: float = 0.0  # the part of expenses that is revenue not received (sun stored, not sold)
     degradation_cost: float = 0.0
     stored_value: float = 0.0  # change in the value of the energy left in the battery
     mode: str = MAX_PROFIT
@@ -117,11 +118,23 @@ class Plan:
     earnings_curve: list[float] = field(default_factory=list)
     expenses_curve: list[float] = field(default_factory=list)
     net_curve: list[float] = field(default_factory=list)
+    forgone_curve: list[float] = field(default_factory=list)  # running total of forgone exports
 
 
 def break_even_sell_price(buy_price: float, params: BatteryParams) -> float:
     """Sell price at which charging at ``buy_price`` just breaks even."""
     return buy_price / params.round_trip_efficiency + params.degradation_per_kwh
+
+
+def percentile(values: list[float], pct: float) -> float | None:
+    """The ``pct``-th percentile (0-100) of ``values``, interpolating between neighbours."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    rank = min(max(pct, 0.0), 100.0) / 100 * (len(ordered) - 1)
+    low = int(rank)
+    high = min(low + 1, len(ordered) - 1)
+    return ordered[low] + (ordered[high] - ordered[low]) * (rank - low)
 
 
 def plan(
@@ -131,8 +144,15 @@ def plan(
     initial_kwh: float = 0.0,
     mode: str = MAX_PROFIT,
     terminal_value: float = 0.0,
+    min_export_price: float | None = None,
+    max_charge_price: float | None = None,
 ) -> Plan:
-    """Best schedule over ``slots`` (equal length ``step_hours`` each)."""
+    """Best schedule over ``slots`` (equal length ``step_hours`` each).
+
+    ``min_export_price`` keeps the battery from exporting in slots that sell for less, and
+    ``max_charge_price`` keeps it from charging from the grid in slots that cost more
+    (covering the house and storing the sun are not affected).
+    """
     result = Plan(mode=mode)
     if not slots or (len(slots) < 2 and initial_kwh <= 0) or params.capacity_kwh <= 0 or params.max_charge_kw <= 0 or params.max_discharge_kw <= 0:
         return result
@@ -164,6 +184,16 @@ def plan(
         return result
     floor = min(units, max(0, round(min(params.min_kwh, params.capacity_kwh) / step)))
     max_charge = max(1, int(charge_cap / step + 1e-9))
+    if house and slots[0].fraction < 1.0:
+        # An interval already under way has little of its load left, perhaps less than one
+        # step of the battery's grain, and a battery that covers the house could then never
+        # discharge: the action would flip to idle at every replan until the next interval.
+        # Rounding the load up to one step (a few Wh, once) keeps the action steady.
+        first = slots[0]
+        deficit = max(first.load_kwh - first.solar_kwh, 0.0)
+        one_step = step * eff_one_way
+        if 0.0 < deficit < one_step:
+            slots = [replace(first, load_kwh=first.load_kwh + one_step - deficit), *slots[1:]]
     max_discharge = max(1, int(discharge_cap / step + 1e-9))
 
     def flows(slot: Slot, move: int) -> tuple[float, float, float, float, float, float, float, float]:
@@ -197,6 +227,7 @@ def plan(
 
     # Cash of every possible move in every slot, against doing nothing (the battery
     # is not there). It does not depend on the level, so it is worked out once.
+    tol = 1e-9  # a gated slot gets no export (or grid charge) at all; moves round down instead
     cash_by_move: list[dict[int, tuple[float, float, float, float]]] = []
     idle_flows: list[tuple[float, ...]] = []
     for slot in slots:
@@ -214,6 +245,10 @@ def plan(
             f = flows(slot, move)
             if only_house and move < 0 and f[3] > deficit + 1e-9:
                 continue  # more than the house needs would be exported
+            if min_export_price is not None and slot.sell_price < min_export_price and move < 0 and f[3] - f[4] > tol:
+                continue  # exporting from the battery is not allowed at this price
+            if max_charge_price is not None and slot.buy_price > max_charge_price and move > 0 and f[5] > tol:
+                continue  # charging from the grid is not allowed at this price
             table[move] = (f[7] - idle[7], f[0], f[1], f[2])
         cash_by_move.append({m: v for m, v in table.items()})
 
@@ -246,7 +281,8 @@ def plan(
     soc = start_units
     level = initial_kwh
     curve = [level]
-    earn_curve, spend_curve, net_curve = [0.0], [0.0], [0.0]
+    earn_curve, spend_curve, net_curve, forgone_curve = [0.0], [0.0], [0.0], [0.0]
+    forgone = 0.0
     bought = delivered_total = to_house = solar_stored = curtailed = 0.0
     earnings = expenses = degradation = 0.0
     plan_flows: list[SlotFlow] = []
@@ -259,11 +295,13 @@ def plan(
         plan_flows.append(SlotFlow(imported, exported, from_solar, cut))
         # Against no battery: purchases avoided and extra exports are earnings; extra
         # purchases and exports given up are expenses.
-        for contribution in (-(imported - i0) * slot.buy_price, (exported - e0) * slot.sell_price):
+        for kind, contribution in (("buy", -(imported - i0) * slot.buy_price), ("sell", (exported - e0) * slot.sell_price)):
             if contribution >= 0:
                 earnings += contribution
             else:
                 expenses -= contribution
+                if kind == "sell":
+                    forgone -= contribution
         degradation += out * params.degradation_per_kwh
         if move > 0:
             bought += from_grid
@@ -280,6 +318,7 @@ def plan(
         soc += move
         earn_curve.append(earnings)
         spend_curve.append(expenses)
+        forgone_curve.append(forgone)
         net_curve.append(earnings - expenses - degradation)
 
     # Stored energy above the reserve at the end, against at the start, at its replacement cost.
@@ -298,6 +337,7 @@ def plan(
     result.flows = plan_flows
     result.earnings_curve, result.expenses_curve, result.net_curve = earn_curve, spend_curve, net_curve
     result.earnings, result.expenses, result.degradation_cost = earnings, expenses, degradation
+    result.forgone_exports, result.forgone_curve = forgone, forgone_curve
     result.stored_value = stored
     result.energy_bought_kwh = bought
     result.energy_to_house_kwh = to_house

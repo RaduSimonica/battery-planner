@@ -20,7 +20,9 @@
           "battery_degradation_per_kwh": "Degradation cost per kWh",
           "battery_soc_entity": "State of charge sensor (optional)",
           "battery_capacity_entity": "Capacity sensor (optional)",
-          "battery_usable_pct": "Share of the battery to use"
+          "battery_usable_pct": "Share of the battery to use",
+          "sell_percentile": "Sell only above this percentile of the day (optional)",
+          "buy_percentile": "Buy only below this percentile of the day (optional)"
         },
         "data_description": {
           "battery_charge_power_kw": "Most power the battery can draw from the grid, in kW at the grid side. 300 W = 0.3 kW.",
@@ -29,7 +31,9 @@
           "battery_degradation_per_kwh": "Battery wear per kWh delivered, in {currency}. Roughly battery price per kWh ÷ lifetime cycles (e.g. 1500 ÷ 6000 = 0.25).",
           "battery_soc_entity": "Percent, Wh or kWh. Used for today's plan.",
           "battery_capacity_entity": "Usable capacity in Wh or kWh. Replaces the fixed capacity.",
-          "battery_usable_pct": "The planner only works with this share of the capacity. The rest is a reserve at the bottom that is never sold (backup power, your own use). 50% of a 10 kWh battery means 5 kWh to plan with and 5 kWh kept."
+          "battery_usable_pct": "The planner only works with this share of the capacity. The rest is a reserve at the bottom that is never sold (backup power, your own use). 50% of a 10 kWh battery means 5 kWh to plan with and 5 kWh kept.",
+          "sell_percentile": "The battery exports to the grid only in intervals whose sell price is at or above this percentile of the day's sell prices. 95 means only the dearest 5% of the day. Leave empty to let the plan decide. Covering the house and storing the sun are never limited.",
+          "buy_percentile": "The battery charges from the grid only in intervals whose buy price is at or below this percentile of the day's buy prices. 5 means only the cheapest 5% of the day. Leave empty to let the plan decide. Storing the sun is never limited."
         }
       },
       "source_entity": {
@@ -104,7 +108,9 @@
           "battery_degradation_per_kwh": "Degradation cost per kWh",
           "battery_soc_entity": "State of charge sensor (optional)",
           "battery_capacity_entity": "Capacity sensor (optional)",
-          "battery_usable_pct": "Share of the battery to use"
+          "battery_usable_pct": "Share of the battery to use",
+          "sell_percentile": "Sell only above this percentile of the day (optional)",
+          "buy_percentile": "Buy only below this percentile of the day (optional)"
         },
         "data_description": {
           "battery_charge_power_kw": "Most power the battery can draw from the grid, in kW at the grid side. 300 W = 0.3 kW.",
@@ -113,7 +119,9 @@
           "battery_degradation_per_kwh": "Battery wear per kWh delivered, in {currency}. Roughly battery price per kWh ÷ lifetime cycles (e.g. 1500 ÷ 6000 = 0.25).",
           "battery_soc_entity": "Percent, Wh or kWh. Used for today's plan.",
           "battery_capacity_entity": "Usable capacity in Wh or kWh. Replaces the fixed capacity.",
-          "battery_usable_pct": "The planner only works with this share of the capacity. The rest is a reserve at the bottom that is never sold (backup power, your own use). 50% of a 10 kWh battery means 5 kWh to plan with and 5 kWh kept."
+          "battery_usable_pct": "The planner only works with this share of the capacity. The rest is a reserve at the bottom that is never sold (backup power, your own use). 50% of a 10 kWh battery means 5 kWh to plan with and 5 kWh kept.",
+          "sell_percentile": "The battery exports to the grid only in intervals whose sell price is at or above this percentile of the day's sell prices. 95 means only the dearest 5% of the day. Leave empty to let the plan decide. Covering the house and storing the sun are never limited.",
+          "buy_percentile": "The battery charges from the grid only in intervals whose buy price is at or below this percentile of the day's buy prices. 5 means only the cheapest 5% of the day. Leave empty to let the plan decide. Storing the sun is never limited."
         }
       },
       "general": {

@@ -15,6 +15,7 @@ from .const import (
     CONF_BATTERY_EFFICIENCY,
     CONF_BATTERY_POWER_ENTITY,
     CONF_BATTERY_POWER_FLIP,
+    CONF_BUY_PERCENTILE,
     CONF_EV_BATTERY_KW,
     CONF_EV_MAX_KW,
     CONF_EV_POWER_ENTITY,
@@ -25,6 +26,7 @@ from .const import (
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_POWER_FLIP,
     CONF_HOUSE_POWER_ENTITY,
+    CONF_SELL_PERCENTILE,
     CONF_SOLAR_POWER_ENTITY,
 )
 from .consumption import LoadSources
@@ -42,6 +44,15 @@ def battery(options: Mapping[str, Any]) -> BatteryParams:
         round_trip_efficiency=get(options, CONF_BATTERY_EFFICIENCY) / 100,
         degradation_per_kwh=get(options, CONF_BATTERY_DEGRADATION),
     )
+
+
+def trade_percentiles(options: Mapping[str, Any]) -> tuple[float | None, float | None]:
+    """(sell, buy) percentiles of the day's prices; ``None`` when not set."""
+    def one(key: str) -> float | None:
+        value = options.get(key)
+        return min(max(float(value), 0.0), 100.0) if value not in (None, "") else None
+
+    return one(CONF_SELL_PERCENTILE), one(CONF_BUY_PERCENTILE)
 
 
 def load_sources(options: Mapping[str, Any]) -> LoadSources:

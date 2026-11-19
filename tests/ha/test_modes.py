@@ -113,3 +113,15 @@ async def test_running_the_battery_down_lowers_the_net_result(hass, entry, freez
     result = float(hass.states.get("sensor.battery_planner_net_result_today").state)
     assert hass.states.get("sensor.battery_planner_net_gain_today").attributes["stored_energy_value"] < 0
     assert result < gain
+
+
+async def test_sell_percentile_limits_exports_to_the_dearest_slots(hass, entry, freezer):
+    await start(hass, entry, freezer)
+    free = float(hass.states.get(EXPORT).state)
+    assert "export_only_above" not in hass.states.get(GAIN).attributes
+    hass.config_entries.async_update_entry(entry, options={**BATTERY, "sell_percentile": 95})
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    attrs = hass.states.get(GAIN).attributes
+    assert attrs["export_only_above"] > 0
+    assert float(hass.states.get(EXPORT).state) <= free + 1e-9

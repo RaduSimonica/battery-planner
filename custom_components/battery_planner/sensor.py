@@ -86,6 +86,7 @@ def _plan_attrs(offset: int) -> Callable[[PlanData], dict[str, Any]]:
             out |= {
                 "earnings": round(plan.earnings, 4),
                 "expenses": round(plan.expenses, 4),
+                "forgone_exports": round(plan.forgone_exports, 4),
                 "degradation_cost": round(plan.degradation_cost, 4),
                 "stored_energy_value": round(plan.stored_value, 4),
                 "energy_to_house_kwh": round(plan.energy_to_house_kwh, 2),
@@ -440,7 +441,7 @@ class PlanTableSensor(PlannerEntity, SensorEntity):
     def _rows(self) -> list[dict[str, Any]]:
         d = self.coordinator.data
         rows: list[dict[str, Any]] = []
-        earned = spent = net = 0.0  # running totals continue from today into tomorrow
+        earned = spent = net = forgone = 0.0  # running totals continue from today into tomorrow
         for offset in (0, 1):
             plan, pts, info = d.plans.get(offset), d.points.get(offset), d.info.get(offset)
             if plan is None or not pts or not info or len(plan.soc) != len(pts) + 1:
@@ -451,7 +452,7 @@ class PlanTableSensor(PlannerEntity, SensorEntity):
             sun = d.solar.get(offset) or [0.0] * len(pts)
             cars = d.ev.get(offset) or [0.0] * len(pts)
             flows = plan.flows if len(plan.flows) == len(pts) else None
-            curves = (plan.earnings_curve, plan.expenses_curve, plan.net_curve)
+            curves = (plan.earnings_curve, plan.expenses_curve, plan.net_curve, plan.forgone_curve)
             for i, p in enumerate(pts):
                 step = by_start.get(p.start)
                 charge = step.grid_kwh if step and step.action == "charge" else 0.0  # from the grid
@@ -482,12 +483,14 @@ class PlanTableSensor(PlannerEntity, SensorEntity):
                         "earnings": round(earned + curves[0][i + 1], 3),
                         "expenses": round(spent + curves[1][i + 1], 3),
                         "net": round(net + curves[2][i + 1], 3),
+                        "forgone_exports": round(forgone + curves[3][i + 1], 3),
                     }
                 rows.append(row)
             if plan.net_curve:
                 earned += plan.earnings_curve[-1]
                 spent += plan.expenses_curve[-1]
                 net += plan.net_curve[-1]
+                forgone += plan.forgone_curve[-1]
         return rows
 
     @property

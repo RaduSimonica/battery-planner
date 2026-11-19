@@ -24,6 +24,7 @@ def _plan_summary(plan: Any, points: list[Any]) -> dict[str, Any]:
         "net_gain": round(plan.net_gain, 3),
         "earnings": round(plan.earnings, 3),
         "expenses": round(plan.expenses, 3),
+        "forgone_exports": round(plan.forgone_exports, 3),
         "degradation_cost": round(plan.degradation_cost, 3),
         "stored_value": round(plan.stored_value, 3),
         "energy_bought_kwh": round(plan.energy_bought_kwh, 3),

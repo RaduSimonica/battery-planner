@@ -30,6 +30,8 @@ CONF_BATTERY_EFFICIENCY = "battery_round_trip_efficiency_pct"
 CONF_BATTERY_DEGRADATION = "battery_degradation_per_kwh"
 CONF_BATTERY_USABLE = "battery_usable_pct"  # share of the battery the planner may use
 CONF_TIMER_HORIZON = "timer_horizon_hours"  # how far ahead the countdown sensors look
+CONF_SELL_PERCENTILE = "sell_percentile"  # optional: export from the battery only at or above it
+CONF_BUY_PERCENTILE = "buy_percentile"  # optional: charge from the grid only at or below it
 CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"  # optional: live state of charge
 CONF_BATTERY_CAPACITY_ENTITY = "battery_capacity_entity"  # optional: live usable capacity
 

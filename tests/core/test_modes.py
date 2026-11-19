@@ -145,6 +145,7 @@ def test_running_totals_follow_the_plan():
     assert p.earnings_curve[0] == p.expenses_curve[0] == p.net_curve[0] == 0.0
     assert p.earnings_curve[-1] == pytest.approx(p.earnings)
     assert p.expenses_curve[-1] == pytest.approx(p.expenses)
+    assert p.forgone_curve[-1] == pytest.approx(p.forgone_exports) and 0 <= p.forgone_exports <= p.expenses + 1e-9
     assert p.net_curve[-1] == pytest.approx(p.net_gain)
     assert all(b >= a - 1e-9 for a, b in zip(p.earnings_curve, p.earnings_curve[1:]))  # only grows
     assert all(b >= a - 1e-9 for a, b in zip(p.expenses_curve, p.expenses_curve[1:]))
@@ -161,3 +162,51 @@ def test_balanced_does_not_sell_rounding_noise():
     out = sum(s.grid_kwh for s in p.slots if s.action == "discharge")
     assert p.energy_sold_kwh < 0.1 * out
     assert max(s.grid_kwh for s in p.slots if s.action == "discharge") < 0.069 * 1.2
+
+
+def test_percentile_interpolates():
+    from custom_components.battery_planner.arbitrage import percentile
+
+    assert percentile([], 50) is None
+    assert percentile([1, 2, 3, 4, 5], 0) == 1 and percentile([1, 2, 3, 4, 5], 100) == 5
+    assert percentile([1, 2, 3, 4, 5], 50) == 3
+    assert percentile([0, 10], 95) == pytest.approx(9.5)
+
+
+def test_exports_only_in_the_dearest_slots_when_a_floor_is_set():
+    slots = day()
+    free = run(MAX_PROFIT, slots, initial=8.0)
+    floor = sorted(s.sell_price for s in slots)[int(0.95 * 95)]
+    gated = plan(slots, 0.25, BATTERY, 8.0, mode=MAX_PROFIT, min_export_price=floor)
+    sold = [s for s in gated.slots if s.action == "discharge"]
+    assert free.energy_sold_kwh > 0 and 0 < len(sold)
+    assert all(s.price >= floor - 1e-9 for s in sold)
+    assert gated.energy_sold_kwh <= free.energy_sold_kwh + 1e-9
+
+
+def test_grid_charging_only_in_the_cheapest_slots_when_a_cap_is_set():
+    slots = day()
+    cap = min(s.buy_price for s in slots)  # only the cheapest price allowed
+    gated = plan(slots, 0.25, BATTERY, 0.0, mode=MAX_PROFIT, max_charge_price=cap)
+    assert all(s.price <= cap + 1e-9 for s in gated.slots if s.action == "charge")
+    blocked = plan(slots, 0.25, BATTERY, 0.0, mode=MAX_PROFIT, max_charge_price=0.0)
+    assert blocked.energy_bought_kwh == 0 and not blocked.slots
+
+
+def test_balanced_floor_still_covers_the_house():
+    slots = day(load_kwh=0.1)
+    p = plan(slots, 0.25, BATTERY, 6.0, mode=BALANCED, terminal_value=0.4, min_export_price=1e9)
+    assert p.energy_sold_kwh < 0.15 * max(p.energy_to_house_kwh, 1e-9) + 0.05
+    assert p.energy_to_house_kwh > 0
+
+
+@pytest.mark.parametrize("mode", [SELF_CONSUMPTION, BALANCED])
+@pytest.mark.parametrize("left", [1.0, 0.66, 0.5, 0.33, 0.17, 0.07])
+def test_the_action_does_not_flip_to_idle_late_in_an_interval(mode, left):
+    """A replan late in an interval has little load left; the battery must still cover it."""
+    from dataclasses import replace
+
+    slots = [Slot(T0 + timedelta(minutes=15 * i), 3.3, 2.2, load_kwh=0.07) for i in range(40)]
+    slots[0] = replace(slots[0], fraction=left, load_kwh=0.07 * left)
+    p = plan(slots, 0.25, BatteryParams(12, 4.8, 4.8, 0.9, 0.05), 8.0, mode=mode, terminal_value=2.0)
+    assert p.slots and p.slots[0].start == slots[0].start and p.slots[0].action == "discharge"
