@@ -68,7 +68,7 @@ It is only worth cycling when that is positive. The planner finds the best sched
 
 | Entity | Meaning |
 |---|---|
-| Net gain today / tomorrow | Earnings minus expenses minus battery wear, against not using the battery. Attributes hold the schedule (charge/discharge windows), energy bought, sold and used by the house, cycles, the break-even sell price and the mode |
+| Net gain today / tomorrow | Earnings minus expenses minus battery wear, against not using the battery. Expenses are energy bought plus exports given up when the sun is stored instead of sold (`forgone_exports` shows that part). Attributes hold the schedule (charge/discharge windows), energy bought, sold and used by the house, cycles, the break-even sell price and the mode |
 | Net result today / tomorrow | The net gain plus the value of the energy the plan leaves in the battery, at what it would cost to buy again. Use it to compare the modes: a mode that runs the battery down looks better in the net gain and worse here, because the refill is paid the next day |
 | Plan | The whole plan interval by interval for charts and cards: the `plan` attribute lists price, action, energy bought, delivered, to the house and exported, expected house use, battery level and running earnings, expenses and net result, from now to the end of tomorrow |
 | Expected solar today / tomorrow | The solar forecast from the Energy dashboard (only when one exists), added up over all providers |
@@ -100,6 +100,10 @@ The *Planning mode* select (also usable from an automation) changes what the pla
 | **Balanced** | Covers the house first, then exports what is left when the sell price pays. |
 
 The two house modes need the consumption forecast (see below). Until it has history the plan falls back to max profit and says so in the `mode_note` attribute. Energy left in the battery at the end of the day is worth what it would cost to buy again (the cheapest buy price in the next day and a half), so the plan does not sell the battery empty when the house will need it tomorrow. The house's expected use per interval is the hourly forecast spread over its quarter hours. Solar is part of both house modes (see below); max profit ignores the house and the panels.
+
+**What each mode does, in plain words.** *Max profit* is buy low, sell high on the grid prices, using the energy above your reserve: it ignores the house and the panels, so with a battery at the reserve and a sunny day ahead it plans nothing. *Cheap self-consumption* is about the house: the battery covers its use at the dearest hours and the sun fills it, with no exports from the battery. *Balanced* is the house first and then export, but only when a kWh sells for more than it would cost to replace, so it exports a little in the dearest slots.
+
+**Trading only at the extremes.** Under *Configure → Battery* two optional percentiles keep the battery from small trades. *Sell only above this percentile of the day* set to 95 exports only in the dearest 5% of the day's sell prices. *Buy only below this percentile of the day* set to 5 charges from the grid only in the cheapest 5% of the buy prices. The percentiles are worked out per day from all of the day's prices, and apply in every mode. Covering the house and storing the sun are never limited. Too small a share can leave the battery without a slot to trade on a flat day. Empty (the default) lets the plan decide.
 
 ### Solar
 

@@ -1,7 +1,11 @@
 # What the plan is expected to earn and spend, building up over the plan
 # (today's rest, then tomorrow). Running totals from now: money received
 # (exports, plus purchases avoided when the battery powers the house), money
-# spent buying energy, and the cash result after battery wear. Needs
+# spent (energy bought, plus exports given up: when the battery stores the sun
+# instead of selling it, the money you would have been paid counts as spent, so
+# the net line dips while it charges and recovers when the house uses it) and
+# the cash result after battery wear. The dashed line is the part of the
+# expenses that is only exports given up, not money paid to the grid. Needs
 # apexcharts-card (HACS -> Frontend). Entity ids: see battery-plan.yaml.
 type: custom:apexcharts-card
 header:
@@ -31,7 +35,7 @@ series:
       return (entity.attributes.plan || []).map(r => [new Date(r.end).getTime(), r.earnings]);
   - entity: sensor.battery_planner_plan
     extend_to: false
-    name: Expenses
+    name: Expenses (bought + exports given up)
     type: line
     curve: stepline
     color: "#ff4757"
@@ -53,3 +57,16 @@ series:
       in_header: false
     data_generator: |
       return (entity.attributes.plan || []).map(r => [new Date(r.end).getTime(), r.net]);
+  - entity: sensor.battery_planner_plan
+    extend_to: false
+    name: of which exports given up
+    type: line
+    curve: stepline
+    color: "#ffa502"
+    stroke_width: 1
+    stroke_dash: 4
+    float_precision: 2
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.plan || []).map(r => [new Date(r.end).getTime(), r.forgone_exports]);

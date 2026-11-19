@@ -82,8 +82,8 @@ the grid setpoint or the charge and discharge limits for the current interval.
 
 ## 5. Better reporting
 
-- **Split *Expenses*** into real purchases and **forgone exports** (the revenue given up
-  when the sun is stored), so the figure does not look like money spent.
+- **Split *Expenses*:** the forgone exports are reported apart (0.4.0-snapshot.4). To do: a
+  separate *Expenses* sensor for real purchases only.
 - **Max profit's net result** is not comparable with the house modes, because that mode
   places no value on the energy left in the battery. Value it for reporting only.
 - **Plan against reality:** record what the battery really did and compare it with the plan.
